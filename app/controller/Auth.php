@@ -17,9 +17,9 @@ class Auth extends BaseController
 {
     protected JwtService $jwtService;
     
-    public function __construct()
+    public function __construct(\think\App $app)
     {
-        parent::__construct();
+        parent::__construct($app);
         $this->jwtService = new JwtService();
     }
     
@@ -85,7 +85,12 @@ class Auth extends BaseController
                     'username' => $user->username,
                     'email' => $user->email,
                     'nickname' => $user->nickname,
+                    'name' => $user->name,
+                    'code_age' => $user->code_age,
+                    'description' => $user->description,
                     'avatar' => $user->avatar,
+                    'github' => $user->github,
+                    'wechat' => $user->wechat,
                     'last_login_time' => $user->last_login_time,
                 ]
             ]
@@ -189,7 +194,12 @@ class Auth extends BaseController
                     'username' => $user->username,
                     'email' => $user->email,
                     'nickname' => $user->nickname,
+                    'name' => $user->name,
+                    'code_age' => $user->code_age,
+                    'description' => $user->description,
                     'avatar' => $user->avatar,
+                    'github' => $user->github,
+                    'wechat' => $user->wechat,
                     'status' => $user->status,
                     'last_login_time' => $user->last_login_time,
                     'last_login_ip' => $user->last_login_ip,

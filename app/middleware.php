@@ -6,7 +6,10 @@ return [
     // 多语言加载
     // \think\middleware\LoadLangPack::class,
     // Session初始化
-    // \think\middleware\SessionInit::class
+    // \think\middleware\SessionInit::class,
+    
+    // CORS跨域中间件 - 全局应用
+    \app\middleware\Cors::class,
 ];
 
 // 别名中间件定义

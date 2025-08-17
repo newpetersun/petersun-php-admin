@@ -16,7 +16,7 @@ class User extends BaseController
     public function info(): Response
     {
         try {
-            $user = Db::name('user')->where('id', 1)->find();
+            $user = Db::name('users')->where('id', 1)->find();
             
             if (!$user) {
                 return json(['code' => 404, 'message' => '用户信息不存在']);
@@ -58,7 +58,7 @@ class User extends BaseController
                 return json(['code' => 400, 'message' => '邮箱格式不正确']);
             }
             
-            $result = Db::name('user')->where('id', 1)->update($data);
+            $result = Db::name('users')->where('id', 1)->update($data);
             
             if ($result !== false) {
                 return json(['code' => 200, 'message' => '更新成功']);

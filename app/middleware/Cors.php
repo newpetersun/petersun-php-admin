@@ -19,43 +19,36 @@ class Cors
      */
     public function handle(Request $request, \Closure $next): Response
     {
-        // 检查是否启用CORS
-        if (!config('cors.enabled', true)) {
-            return $next($request);
+        // 处理预检请求 - 必须在调用next之前处理
+        if ($request->method() === 'OPTIONS') {
+            // 创建空响应
+            $response = Response::create('', 'text', 200);
+            
+            // 设置CORS头 - 确保所有必要的头都被设置
+            $response->header([
+                'Access-Control-Allow-Origin' => 'http://localhost:5173',
+                'Access-Control-Allow-Headers' => 'Authorization, Content-Type, If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, X-CSRF-TOKEN, X-Requested-With, Accept, Origin, Cache-Control, X-File-Name',
+                'Access-Control-Allow-Methods' => 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+                'Access-Control-Allow-Credentials' => 'true',
+                'Access-Control-Max-Age' => '86400',
+                'Content-Type' => 'text/plain; charset=utf-8',
+                'Content-Length' => '0'
+            ]);
+            
+            return $response;
         }
         
         // 获取响应对象
         $response = $next($request);
         
-        // 获取CORS配置
-        $origin = config('cors.allow_origin', '*');
-        $headers = implode(', ', config('cors.allow_headers', []));
-        $methods = implode(', ', config('cors.allow_methods', []));
-        $credentials = config('cors.allow_credentials', true) ? 'true' : 'false';
-        $maxAge = config('cors.max_age', 86400);
-        $exposeHeaders = implode(', ', config('cors.expose_headers', []));
-        
-        // 设置CORS头
-        $corsHeaders = [
-            'Access-Control-Allow-Origin' => $origin,
-            'Access-Control-Allow-Headers' => $headers,
-            'Access-Control-Allow-Methods' => $methods,
-            'Access-Control-Allow-Credentials' => $credentials,
-            'Access-Control-Max-Age' => $maxAge,
-        ];
-        
-        // 添加暴露的响应头
-        if (!empty($exposeHeaders)) {
-            $corsHeaders['Access-Control-Expose-Headers'] = $exposeHeaders;
-        }
-        
-        $response->header($corsHeaders);
-        
-        // 处理预检请求
-        if ($request->method() === 'OPTIONS') {
-            $response->code(200);
-            $response->content('');
-        }
+        // 为所有响应设置CORS头
+        $response->header([
+            'Access-Control-Allow-Origin' => 'http://localhost:5173',
+            'Access-Control-Allow-Headers' => 'Authorization, Content-Type, If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, X-CSRF-TOKEN, X-Requested-With, Accept, Origin, Cache-Control, X-File-Name',
+            'Access-Control-Allow-Methods' => 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+            'Access-Control-Allow-Credentials' => 'true',
+            'Access-Control-Max-Age' => '86400',
+        ]);
         
         return $response;
     }
