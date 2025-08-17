@@ -42,3 +42,7 @@ Route::group('admin', function () {
     Route::get('message', 'Admin/message');
     Route::get('setting', 'Admin/setting');
 });
+
+// 测试路由
+Route::get('test', 'Test/index');
+Route::get('test/template', 'Test/template');

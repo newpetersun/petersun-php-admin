@@ -15,6 +15,7 @@ class Admin extends BaseController
      */
     public function index()
     {
+        View::assign('title', '仪表盘');
         return View::fetch('admin/index');
     }
 
@@ -23,6 +24,7 @@ class Admin extends BaseController
      */
     public function user()
     {
+        View::assign('title', '个人信息管理');
         return View::fetch('admin/user');
     }
 
@@ -31,6 +33,7 @@ class Admin extends BaseController
      */
     public function project()
     {
+        View::assign('title', '项目管理');
         return View::fetch('admin/project');
     }
 
@@ -39,6 +42,7 @@ class Admin extends BaseController
      */
     public function contact()
     {
+        View::assign('title', '联系信息管理');
         return View::fetch('admin/contact');
     }
 
@@ -47,6 +51,7 @@ class Admin extends BaseController
      */
     public function message()
     {
+        View::assign('title', '留言管理');
         return View::fetch('admin/message');
     }
 
@@ -55,6 +60,7 @@ class Admin extends BaseController
      */
     public function setting()
     {
+        View::assign('title', '系统设置');
         return View::fetch('admin/setting');
     }
 } 
