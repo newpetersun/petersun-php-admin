@@ -12,37 +12,37 @@ use think\facade\Route;
 
 // API路由组
 Route::group('api', function () {
-    // 用户信息相关
+    // 用户相关API
     Route::get('user/info', 'User/info');
     Route::post('user/update', 'User/update');
     
-    // 项目相关
+    // 项目相关API
     Route::get('project/list', 'Project/list');
     Route::get('project/detail/:id', 'Project/detail');
     Route::post('project/create', 'Project/create');
     Route::post('project/update/:id', 'Project/update');
     Route::delete('project/delete/:id', 'Project/delete');
-    Route::get('project/categories', 'Project/categories');
+    Route::post('project/status/:id', 'Project/updateStatus');
     
-    // 联系信息相关
+    // 联系信息相关API
     Route::get('contact/info', 'Contact/info');
     Route::post('contact/update', 'Contact/update');
-    Route::post('contact/message', 'Contact/message');
     Route::get('contact/messages', 'Contact/messages');
-    Route::post('contact/read/:id', 'Contact/readMessage');
-    Route::delete('contact/message/:id', 'Contact/deleteMessage');
+    Route::post('contact/message', 'Contact/message');
+    Route::post('contact/message/read/:id', 'Contact/markAsRead');
+    Route::delete('contact/message/delete/:id', 'Contact/deleteMessage');
 });
 
-// 后台管理路由组
-Route::group('admin', function () {
-    Route::get('/', 'Admin/index');
-    Route::get('user', 'Admin/user');
-    Route::get('project', 'Admin/project');
-    Route::get('contact', 'Admin/contact');
-    Route::get('message', 'Admin/message');
-    Route::get('setting', 'Admin/setting');
+// 默认首页路由
+Route::get('/', function () {
+    return json([
+        'code' => 200,
+        'message' => '解忧青年作品集 API 服务',
+        'version' => '1.0.0',
+        'endpoints' => [
+            'user' => '/api/user/*',
+            'project' => '/api/project/*',
+            'contact' => '/api/contact/*'
+        ]
+    ]);
 });
-
-// 测试路由
-Route::get('test', 'Test/index');
-Route::get('test/template', 'Test/template');

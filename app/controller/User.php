@@ -28,9 +28,11 @@ class User extends BaseController
                 'data' => [
                     'name' => $user['name'],
                     'email' => $user['email'],
+                    'code_age' => $user['code_age'],
                     'description' => $user['description'],
                     'avatar' => $user['avatar'],
-                    'code_age' => $user['code_age']
+                    'github' => $user['github'],
+                    'wechat' => $user['wechat']
                 ]
             ]);
         } catch (\Exception $e) {
@@ -44,7 +46,17 @@ class User extends BaseController
     public function update(Request $request)
     {
         try {
-            $data = $request->only(['name', 'email', 'description', 'avatar', 'code_age']);
+            $data = $request->only(['name', 'email', 'code_age', 'description', 'avatar', 'github', 'wechat']);
+            
+            // 验证必填字段
+            if (empty($data['name']) || empty($data['email'])) {
+                return json(['code' => 400, 'message' => '姓名和邮箱不能为空']);
+            }
+            
+            // 验证邮箱格式
+            if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+                return json(['code' => 400, 'message' => '邮箱格式不正确']);
+            }
             
             $result = Db::name('user')->where('id', 1)->update($data);
             
