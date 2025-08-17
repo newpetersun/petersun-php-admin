@@ -36,7 +36,6 @@ Thumbs.db
 Dockerfile
 docker-compose.yml
 .dockerignore
-docker/
 
 # 测试文件
 tests/
