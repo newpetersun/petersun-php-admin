@@ -1,0 +1,207 @@
+{extend name="admin/layout" /}
+
+{block name="content"}
+<div class="row">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-primary shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            总项目数</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalProjects">0</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-folder fs-2 text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-success shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            未读留言</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="unreadMessages">0</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-chat-dots fs-2 text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-info shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                            今日访问</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="todayVisits">0</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-eye fs-2 text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-warning shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            系统状态</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">正常</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-check-circle fs-2 text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">最近项目</h6>
+            </div>
+            <div class="card-body">
+                <div id="recentProjects">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">最新留言</h6>
+            </div>
+            <div class="card-body">
+                <div id="recentMessages">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+});
+
+function loadDashboardData() {
+    // 加载项目统计
+    axios.get('/project/list?limit=5')
+        .then(response => {
+            if (response.data.code === 200) {
+                const projects = response.data.data.data;
+                document.getElementById('totalProjects').textContent = response.data.data.total;
+                displayRecentProjects(projects);
+            }
+        })
+        .catch(error => {
+            console.error('加载项目数据失败:', error);
+        });
+
+    // 加载留言统计
+    axios.get('/contact/messages?limit=5')
+        .then(response => {
+            if (response.data.code === 200) {
+                const messages = response.data.data.data;
+                const unreadCount = messages.filter(msg => msg.status === 0).length;
+                document.getElementById('unreadMessages').textContent = unreadCount;
+                displayRecentMessages(messages);
+            }
+        })
+        .catch(error => {
+            console.error('加载留言数据失败:', error);
+        });
+}
+
+function displayRecentProjects(projects) {
+    const container = document.getElementById('recentProjects');
+    if (projects.length === 0) {
+        container.innerHTML = '<p class="text-muted">暂无项目</p>';
+        return;
+    }
+
+    let html = '';
+    projects.forEach(project => {
+        html += `
+            <div class="d-flex align-items-center mb-3">
+                <div class="flex-shrink-0">
+                    <img src="${project.image || '/static/images/default-project.jpg'}" 
+                         class="rounded" width="50" height="50" style="object-fit: cover;">
+                </div>
+                <div class="flex-grow-1 ms-3">
+                    <h6 class="mb-0">${project.title}</h6>
+                    <small class="text-muted">${project.description}</small>
+                </div>
+                <div class="flex-shrink-0">
+                    <span class="badge bg-${project.status ? 'success' : 'secondary'}">
+                        ${project.status ? '启用' : '禁用'}
+                    </span>
+                </div>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+
+function displayRecentMessages(messages) {
+    const container = document.getElementById('recentMessages');
+    if (messages.length === 0) {
+        container.innerHTML = '<p class="text-muted">暂无留言</p>';
+        return;
+    }
+
+    let html = '';
+    messages.forEach(message => {
+        html += `
+            <div class="d-flex align-items-start mb-3">
+                <div class="flex-shrink-0">
+                    <div class="avatar bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
+                         style="width: 40px; height: 40px;">
+                        ${message.name.charAt(0).toUpperCase()}
+                    </div>
+                </div>
+                <div class="flex-grow-1 ms-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <h6 class="mb-0">${message.name}</h6>
+                        <small class="text-muted">${utils.formatDate(message.created_at)}</small>
+                    </div>
+                    <p class="mb-1 text-muted">${message.message.substring(0, 50)}${message.message.length > 50 ? '...' : ''}</p>
+                    <span class="badge bg-${message.status ? 'success' : 'warning'}">
+                        ${message.status ? '已读' : '未读'}
+                    </span>
+                </div>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+</script>
+{/block} 

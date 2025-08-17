@@ -10,8 +10,35 @@
 // +----------------------------------------------------------------------
 use think\facade\Route;
 
-Route::get('think', function () {
-    return 'hello,ThinkPHP8!';
+// API路由组
+Route::group('api', function () {
+    // 用户信息相关
+    Route::get('user/info', 'User/info');
+    Route::post('user/update', 'User/update');
+    
+    // 项目相关
+    Route::get('project/list', 'Project/list');
+    Route::get('project/detail/:id', 'Project/detail');
+    Route::post('project/create', 'Project/create');
+    Route::post('project/update/:id', 'Project/update');
+    Route::delete('project/delete/:id', 'Project/delete');
+    Route::get('project/categories', 'Project/categories');
+    
+    // 联系信息相关
+    Route::get('contact/info', 'Contact/info');
+    Route::post('contact/update', 'Contact/update');
+    Route::post('contact/message', 'Contact/message');
+    Route::get('contact/messages', 'Contact/messages');
+    Route::post('contact/read/:id', 'Contact/readMessage');
+    Route::delete('contact/message/:id', 'Contact/deleteMessage');
 });
 
-Route::get('hello/:name', 'index/hello');
+// 后台管理路由组
+Route::group('admin', function () {
+    Route::get('/', 'Admin/index');
+    Route::get('user', 'Admin/user');
+    Route::get('project', 'Admin/project');
+    Route::get('contact', 'Admin/contact');
+    Route::get('message', 'Admin/message');
+    Route::get('setting', 'Admin/setting');
+});

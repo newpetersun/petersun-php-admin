@@ -1,0 +1,98 @@
+{extend name="admin/layout" /}
+
+{block name="content"}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">个人信息管理</h5>
+    </div>
+    <div class="card-body">
+        <form id="userForm">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="userName" class="form-label">姓名</label>
+                        <input type="text" class="form-control" id="userName" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="userEmail" class="form-label">邮箱</label>
+                        <input type="email" class="form-control" id="userEmail" required>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="userCodeAge" class="form-label">码龄（年）</label>
+                        <input type="number" class="form-control" id="userCodeAge" min="0" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="userAvatar" class="form-label">头像URL</label>
+                        <input type="url" class="form-control" id="userAvatar">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="userDescription" class="form-label">个人描述</label>
+                <textarea class="form-control" id="userDescription" rows="5" required></textarea>
+            </div>
+            
+            <div class="text-end">
+                <button type="button" class="btn btn-primary" onclick="saveUserInfo()">
+                    <i class="bi bi-save"></i> 保存信息
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadUserInfo();
+});
+
+function loadUserInfo() {
+    axios.get('/user/info')
+        .then(response => {
+            if (response.data.code === 200) {
+                const user = response.data.data;
+                document.getElementById('userName').value = user.name;
+                document.getElementById('userEmail').value = user.email;
+                document.getElementById('userCodeAge').value = user.code_age;
+                document.getElementById('userAvatar').value = user.avatar || '';
+                document.getElementById('userDescription').value = user.description;
+            }
+        })
+        .catch(error => {
+            console.error('加载用户信息失败:', error);
+            utils.showError('加载用户信息失败');
+        });
+}
+
+function saveUserInfo() {
+    const formData = {
+        name: document.getElementById('userName').value,
+        email: document.getElementById('userEmail').value,
+        code_age: document.getElementById('userCodeAge').value,
+        avatar: document.getElementById('userAvatar').value,
+        description: document.getElementById('userDescription').value
+    };
+    
+    axios.post('/user/update', formData)
+        .then(response => {
+            if (response.data.code === 200) {
+                utils.showSuccess(response.data.message);
+            }
+        })
+        .catch(error => {
+            console.error('保存用户信息失败:', error);
+            utils.showError('保存用户信息失败');
+        });
+}
+</script>
+{/block} 
