@@ -21,6 +21,7 @@ class ComposerStaticInit19e23a2d795fd76decfea213ca2b454a
         array (
             'think\\view\\driver\\' => 18,
             'think\\trace\\' => 12,
+            'think\\migration\\' => 16,
             'think\\dumper\\' => 13,
             'think\\' => 6,
         ),
@@ -40,12 +41,17 @@ class ComposerStaticInit19e23a2d795fd76decfea213ca2b454a
             'Psr\\Http\\Message\\' => 17,
             'Psr\\Container\\' => 14,
             'Psr\\Cache\\' => 10,
+            'Phinx\\' => 6,
         ),
         'L' => 
         array (
             'League\\MimeTypeDetection\\' => 25,
             'League\\Flysystem\\Cached\\' => 24,
             'League\\Flysystem\\' => 17,
+        ),
+        'F' => 
+        array (
+            'Firebase\\JWT\\' => 13,
         ),
     );
 
@@ -57,6 +63,10 @@ class ComposerStaticInit19e23a2d795fd76decfea213ca2b454a
         'think\\trace\\' => 
         array (
             0 => __DIR__ . '/..' . '/topthink/think-trace/src',
+        ),
+        'think\\migration\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/topthink/think-migration/src',
         ),
         'think\\dumper\\' => 
         array (
@@ -104,6 +114,10 @@ class ComposerStaticInit19e23a2d795fd76decfea213ca2b454a
         array (
             0 => __DIR__ . '/..' . '/psr/cache/src',
         ),
+        'Phinx\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/topthink/think-migration/phinx',
+        ),
         'League\\MimeTypeDetection\\' => 
         array (
             0 => __DIR__ . '/..' . '/league/mime-type-detection/src',
@@ -115,6 +129,10 @@ class ComposerStaticInit19e23a2d795fd76decfea213ca2b454a
         'League\\Flysystem\\' => 
         array (
             0 => __DIR__ . '/..' . '/league/flysystem/src',
+        ),
+        'Firebase\\JWT\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/firebase/php-jwt/src',
         ),
     );
 
