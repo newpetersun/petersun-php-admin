@@ -10,52 +10,6 @@ use think\Response;
 
 class Admin extends BaseController
 {
-    /**
-     * 管理员登录
-     */
-    public function login(Request $request): Response
-    {
-        try {
-            $data = $request->only(['username', 'password']);
-            
-            // 验证必填字段
-            if (empty($data['username']) || empty($data['password'])) {
-                return json(['code' => 400, 'message' => '用户名和密码不能为空']);
-            }
-            
-            // 这里应该查询管理员表，暂时使用硬编码验证
-            if ($data['username'] === 'admin' && $data['password'] === '123456') {
-                // 生成token
-                $token = md5($data['username'] . time() . rand(1000, 9999));
-                
-                // 记录登录日志
-                Db::name('admin_log')->insert([
-                    'username' => $data['username'],
-                    'action' => 'login',
-                    'ip' => $request->ip(),
-                    'user_agent' => $request->header('user-agent'),
-                    'create_time' => date('Y-m-d H:i:s')
-                ]);
-                
-                return json([
-                    'code' => 200,
-                    'message' => '登录成功',
-                    'data' => [
-                        'token' => $token,
-                        'user' => [
-                            'username' => $data['username'],
-                            'role' => 'admin',
-                            'login_time' => date('Y-m-d H:i:s')
-                        ]
-                    ]
-                ]);
-            } else {
-                return json(['code' => 401, 'message' => '用户名或密码错误']);
-            }
-        } catch (\Exception $e) {
-            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
-        }
-    }
 
     /**
      * 获取仪表盘数据

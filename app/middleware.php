@@ -12,4 +12,5 @@ return [
 // 别名中间件定义
 return [
     'JwtAuth' => \app\middleware\JwtAuth::class,
-];
+    'Cors' => \app\middleware\Cors::class,
+]; 
