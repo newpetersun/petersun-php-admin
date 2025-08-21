@@ -919,6 +919,65 @@
             "install-path": "../topthink/think-container"
         },
         {
+            "name": "topthink/think-cors",
+            "version": "v1.0.2",
+            "version_normalized": "1.0.2.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/top-think/think-cors.git",
+                "reference": "822d90b357daa5aa5e1d01668615599f428ad132"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/top-think/think-cors/zipball/822d90b357daa5aa5e1d01668615599f428ad132",
+                "reference": "822d90b357daa5aa5e1d01668615599f428ad132",
+                "shasum": "",
+                "mirrors": [
+                    {
+                        "url": "https://mirrors.aliyun.com/composer/dists/%package%/%reference%.%type%",
+                        "preferred": true
+                    }
+                ]
+            },
+            "require": {
+                "topthink/framework": "^6.0|^8.0"
+            },
+            "time": "2024-04-26T06:32:17+00:00",
+            "type": "library",
+            "extra": {
+                "think": {
+                    "config": {
+                        "cors": "src/config.php"
+                    },
+                    "services": [
+                        "think\\cors\\Service"
+                    ]
+                }
+            },
+            "installation-source": "dist",
+            "autoload": {
+                "psr-4": {
+                    "think\\cors\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "Apache-2.0"
+            ],
+            "authors": [
+                {
+                    "name": "yunwuxin",
+                    "email": "448901948@qq.com"
+                }
+            ],
+            "description": "The Cors Library For ThinkPHP",
+            "support": {
+                "issues": "https://github.com/top-think/think-cors/issues",
+                "source": "https://github.com/top-think/think-cors/tree/v1.0.2"
+            },
+            "install-path": "../topthink/think-cors"
+        },
+        {
             "name": "topthink/think-dumper",
             "version": "v1.0.5",
             "version_normalized": "1.0.5.0",

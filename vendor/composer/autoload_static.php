@@ -23,6 +23,7 @@ class ComposerStaticInit19e23a2d795fd76decfea213ca2b454a
             'think\\trace\\' => 12,
             'think\\migration\\' => 16,
             'think\\dumper\\' => 13,
+            'think\\cors\\' => 11,
             'think\\' => 6,
         ),
         'a' => 
@@ -71,6 +72,10 @@ class ComposerStaticInit19e23a2d795fd76decfea213ca2b454a
         'think\\dumper\\' => 
         array (
             0 => __DIR__ . '/..' . '/topthink/think-dumper/src',
+        ),
+        'think\\cors\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/topthink/think-cors/src',
         ),
         'think\\' => 
         array (

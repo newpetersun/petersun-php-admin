@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "d4f4165a790ab164008bea1266af59c9",
+    "content-hash": "62aea2c7adf5a87e580f231d14bcc2ed",
     "packages": [
         {
             "name": "firebase/php-jwt",
@@ -704,6 +704,62 @@
                 "source": "https://github.com/top-think/think-container/tree/v3.0.1"
             },
             "time": "2025-01-07T08:19:23+00:00"
+        },
+        {
+            "name": "topthink/think-cors",
+            "version": "v1.0.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/top-think/think-cors.git",
+                "reference": "822d90b357daa5aa5e1d01668615599f428ad132"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/top-think/think-cors/zipball/822d90b357daa5aa5e1d01668615599f428ad132",
+                "reference": "822d90b357daa5aa5e1d01668615599f428ad132",
+                "shasum": "",
+                "mirrors": [
+                    {
+                        "url": "https://mirrors.aliyun.com/composer/dists/%package%/%reference%.%type%",
+                        "preferred": true
+                    }
+                ]
+            },
+            "require": {
+                "topthink/framework": "^6.0|^8.0"
+            },
+            "type": "library",
+            "extra": {
+                "think": {
+                    "config": {
+                        "cors": "src/config.php"
+                    },
+                    "services": [
+                        "think\\cors\\Service"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "think\\cors\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "Apache-2.0"
+            ],
+            "authors": [
+                {
+                    "name": "yunwuxin",
+                    "email": "448901948@qq.com"
+                }
+            ],
+            "description": "The Cors Library For ThinkPHP",
+            "support": {
+                "issues": "https://github.com/top-think/think-cors/issues",
+                "source": "https://github.com/top-think/think-cors/tree/v1.0.2"
+            },
+            "time": "2024-04-26T06:32:17+00:00"
         },
         {
             "name": "topthink/think-filesystem",

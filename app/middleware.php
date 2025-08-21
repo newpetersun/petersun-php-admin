@@ -9,11 +9,10 @@ return [
     // \think\middleware\SessionInit::class,
     
     // CORS跨域中间件 - 全局应用
-    \app\middleware\Cors::class,
+    //\app\middleware\Cors::class,
 ];
 
 // 别名中间件定义
 return [
-    'JwtAuth' => \app\middleware\JwtAuth::class,
-    'Cors' => \app\middleware\Cors::class,
+    'JwtAuth' => \app\middleware\JwtAuth::class
 ]; 

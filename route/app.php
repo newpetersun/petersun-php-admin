@@ -11,7 +11,6 @@
 use think\facade\Route;
 
 // 全局CORS中间件
-Route::group('', function () {
     // 认证相关接口（无需认证）
     Route::group('auth', function () {
         Route::post('login', 'Auth/login'); // 用户登录
@@ -76,8 +75,6 @@ Route::group('', function () {
         Route::get('realtime', 'Visit/realtime'); // 获取实时访问数据
         Route::get('geo', 'Visit/geo'); // 获取地理位置统计
     });
-})->middleware('Cors');
-
 // 默认路由
 Route::get('/', function () {
     return json([
