@@ -55,6 +55,21 @@ class Project extends BaseController
                     ->column('t.name');
                 $project['technologies'] = $technologies;
                 
+                // 获取项目所有图片
+                $images = Db::name('project_images')
+                    ->where('project_id', $project['id'])
+                    ->order('sort_order', 'asc')
+                    ->column('image_url');
+                    
+                // 如果有图片，覆盖单图字段为数组，否则使用当前封面图构建数组
+                if (!empty($images)) {
+                    $project['image'] = $images;
+                } else if (!empty($project['image'])) {
+                    $project['image'] = [$project['image']];
+                } else {
+                    $project['image'] = [];
+                }
+                
                 // 格式化时间
                 $project['create_time'] = date('Y-m-d', strtotime($project['create_time']));
             }
@@ -104,9 +119,16 @@ class Project extends BaseController
             $features = explode(',', $project['features']);
             $features = array_filter($features); // 移除空值
             
+            // 获取项目图片
+            $images = Db::name('project_images')
+                ->where('project_id', $id)
+                ->order('sort_order', 'asc')
+                ->column('image_url');
+            
             $project['tags'] = $tags;
             $project['technologies'] = $technologies;
             $project['features'] = $features;
+            $project['images'] = $images; // 添加图片数组
             $project['create_time'] = date('Y-m-d', strtotime($project['create_time']));
             
             return json([
@@ -191,13 +213,18 @@ class Project extends BaseController
     {
         try {
             $data = $request->only([
-                'title', 'description', 'full_description', 'image', 'category_id',
+                'title', 'description', 'full_description', 'image', 'images', 'category_id',
                 'tags', 'technologies', 'features', 'sort_order', 'is_featured'
             ]);
             
             // 验证必填字段
             if (empty($data['title']) || empty($data['description'])) {
                 return json(['code' => 400, 'message' => '项目标题和描述不能为空']);
+            }
+            
+            // 验证图片
+            if (empty($data['image'])) {
+                return json(['code' => 400, 'message' => '项目图片不能为空']);
             }
             
             Db::startTrans();
@@ -217,6 +244,19 @@ class Project extends BaseController
                 ];
                 
                 $projectId = Db::name('project')->insertGetId($projectData);
+                
+                // 处理多图片
+                if (!empty($data['images']) && is_array($data['images'])) {
+                    $sortOrder = 0;
+                    foreach ($data['images'] as $imageUrl) {
+                        Db::name('project_images')->insert([
+                            'project_id' => $projectId,
+                            'image_url' => $imageUrl,
+                            'sort_order' => $sortOrder++,
+                            'create_time' => date('Y-m-d H:i:s')
+                        ]);
+                    }
+                }
                 
                 // 处理标签关联
                 if (!empty($data['tags']) && is_array($data['tags'])) {
@@ -258,13 +298,18 @@ class Project extends BaseController
     {
         try {
             $data = $request->only([
-                'title', 'description', 'full_description', 'image', 'category_id',
+                'title', 'description', 'full_description', 'image', 'images', 'category_id',
                 'tags', 'technologies', 'features', 'sort_order', 'is_featured'
             ]);
             
             // 验证必填字段
             if (empty($data['title']) || empty($data['description'])) {
                 return json(['code' => 400, 'message' => '项目标题和描述不能为空']);
+            }
+            
+            // 验证图片
+            if (empty($data['image'])) {
+                return json(['code' => 400, 'message' => '项目图片不能为空']);
             }
             
             Db::startTrans();
@@ -283,6 +328,20 @@ class Project extends BaseController
                 ];
                 
                 Db::name('project')->where('id', $id)->update($projectData);
+                
+                // 处理多图片 - 先删除原有图片
+                Db::name('project_images')->where('project_id', $id)->delete();
+                if (!empty($data['images']) && is_array($data['images'])) {
+                    $sortOrder = 0;
+                    foreach ($data['images'] as $imageUrl) {
+                        Db::name('project_images')->insert([
+                            'project_id' => $id,
+                            'image_url' => $imageUrl,
+                            'sort_order' => $sortOrder++,
+                            'create_time' => date('Y-m-d H:i:s')
+                        ]);
+                    }
+                }
                 
                 // 删除旧的标签和技术栈关联
                 Db::name('project_tag')->where('project_id', $id)->delete();
@@ -332,6 +391,7 @@ class Project extends BaseController
                 // 删除项目关联数据
                 Db::name('project_tag')->where('project_id', $id)->delete();
                 Db::name('project_technology')->where('project_id', $id)->delete();
+                Db::name('project_images')->where('project_id', $id)->delete();
                 
                 // 删除项目
                 Db::name('project')->where('id', $id)->delete();
@@ -368,6 +428,15 @@ class Project extends BaseController
     }
 
     /**
+     * 更新项目状态（API路径 /project/status 对应的方法）
+     */
+    public function status(Request $request, $id): Response
+    {
+        // 调用已实现的updateStatus方法
+        return $this->updateStatus($request, $id);
+    }
+
+    /**
      * 获取或创建标签
      */
     private function getOrCreateTag($tagName)
@@ -381,6 +450,52 @@ class Project extends BaseController
             'name' => $tagName,
             'create_time' => date('Y-m-d H:i:s')
         ]);
+    }
+
+    /**
+     * 上传项目图片
+     */
+    public function uploadImage(Request $request): Response
+    {
+        try {
+            $file = $request->file('image');
+            if (!$file) {
+                return json(['code' => 400, 'message' => '未上传文件']);
+            }
+
+            // 检查是否是图片
+            $validate = validate(['image' => [
+                'fileSize' => 5 * 1024 * 1024, // 5MB限制
+                'fileExt' => 'jpg,jpeg,png,gif,webp',
+                'fileMime' => 'image/jpeg,image/png,image/gif,image/webp'
+            ]]);
+
+            if (!$validate->check(['image' => $file])) {
+                return json(['code' => 400, 'message' => $validate->getError()]);
+            }
+
+            // 保存到项目图片目录
+            $savePath = '/static/images/projects/';
+            $fileName = 'project_' . uniqid() . '.' . $file->getOriginalExtension();
+            $info = $file->move(public_path() . $savePath, $fileName);
+            
+            if ($info) {
+                $url = $savePath . $fileName;
+                return json([
+                    'code' => 200, 
+                    'message' => '上传成功', 
+                    'data' => [
+                        'url' => $url,
+                        'name' => $fileName,
+                        'original_name' => $file->getOriginalName()
+                    ]
+                ]);
+            } else {
+                return json(['code' => 500, 'message' => $file->getError()]);
+            }
+        } catch (\Exception $e) {
+            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 <?php
 
 return [
+	'paths' => ['/*'],
     // 允许的域名，* 表示允许所有域名
     'allow_origin' => '*',
     

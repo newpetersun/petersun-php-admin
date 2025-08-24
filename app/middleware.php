@@ -9,7 +9,7 @@ return [
     // \think\middleware\SessionInit::class,
     
     // CORS跨域中间件 - 全局应用
-    //\app\middleware\Cors::class,
+    \app\middleware\AllowCrossDomain::class,
 ];
 
 // 别名中间件定义

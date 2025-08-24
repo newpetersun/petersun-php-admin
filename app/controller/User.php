@@ -7,6 +7,7 @@ use app\BaseController;
 use think\Request;
 use think\facade\Db;
 use think\Response;
+use app\model\User as UserModel;
 
 class User extends BaseController
 {
@@ -17,7 +18,7 @@ class User extends BaseController
     {
         try {
             $id = $request->param('id', 1);
-            $user = Db::name('users')->where('id', $id)->find();
+            $user = UserModel::find($id);
             if (!$user) {
                 return json(['code' => 404, 'message' => '用户信息不存在']);
             }

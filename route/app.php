@@ -32,19 +32,35 @@ use think\facade\Route;
         Route::get('map-data', 'User/mapData'); // 获取地图数据
     });
     
-    // 项目相关接口
+    // 项目相关接口需鉴权
     Route::group('project', function () {
-        Route::get('list', 'Project/list'); // 获取项目列表
-        Route::get('detail/:id', 'Project/detail'); // 获取项目详情
-        Route::get('categories', 'Project/categories'); // 获取项目分类
-        Route::get('featured', 'Project/featured'); // 获取首页推荐项目
         Route::post('create', 'Project/create'); // 创建项目
         Route::post('update/:id', 'Project/update'); // 更新项目
         Route::delete('delete/:id', 'Project/delete'); // 删除项目
         Route::post('status/:id', 'Project/updateStatus'); // 更新项目状态
-    });
+		Route::post('upload-image', 'Project/uploadImage'); // 上传项目图片
+    })->middleware('JwtAuth');
     
-    // 联系相关接口
+	// 项目相关接口无需鉴权
+	Route::group('project', function () {
+	    Route::get('list', 'Project/list'); // 获取项目列表
+	    Route::get('detail/:id', 'Project/detail'); // 获取项目详情
+	    Route::get('categories', 'Project/categories'); // 获取项目分类
+	    Route::get('featured', 'Project/featured'); // 获取首页推荐项目
+	});
+	
+	// 联系相关接口需鉴权
+	Route::group('contact', function () {
+	    Route::post('update', 'Contact/update'); // 更新联系信息
+	    Route::get('messages', 'Contact/messages'); // 获取留言列表
+	    Route::post('read/:id', 'Contact/markAsRead'); // 标记留言为已读
+	    Route::delete('message/:id', 'Contact/deleteMessage'); // 删除留言
+	    Route::get('stats', 'Contact/stats'); // 获取留言统计
+	    Route::post('batch-read', 'Contact/batchMarkAsRead'); // 批量标记为已读
+	    Route::post('batch-delete', 'Contact/batchDelete'); // 批量删除留言
+	})->middleware('JwtAuth');
+	
+    // 联系相关接口无需鉴权
     Route::group('contact', function () {
         Route::get('info', 'Contact/info'); // 获取联系信息
         Route::post('update', 'Contact/update'); // 更新联系信息
@@ -75,63 +91,23 @@ use think\facade\Route;
         Route::get('realtime', 'Visit/realtime'); // 获取实时访问数据
         Route::get('geo', 'Visit/geo'); // 获取地理位置统计
     });
+    
+    // 项目分类接口
+    Route::group('category', function () {
+        Route::get('list', 'Category/list'); // 获取分类列表
+        Route::get('all', 'Category/all'); // 获取所有分类
+        Route::get('detail/:id', 'Category/detail'); // 获取分类详情
+        Route::post('create', 'Category/create'); // 创建分类
+        Route::post('update/:id', 'Category/update'); // 更新分类
+        Route::delete('delete/:id', 'Category/delete'); // 删除分类
+        Route::post('status/:id', 'Category/status'); // 更新分类状态
+    })->middleware('JwtAuth');
 // 默认路由
 Route::get('/', function () {
     return json([
         'code' => 200,
         'message' => 'PeterSun作品集API服务',
         'version' => '1.0.0',
-        'timestamp' => date('Y-m-d H:i:s'),
-        'endpoints' => [
-            'auth' => [
-                'POST /auth/login' => '用户登录',
-                'POST /auth/register' => '用户注册',
-                'GET /auth/profile' => '获取用户信息',
-                'POST /auth/refresh' => '刷新Token',
-                'POST /auth/logout' => '用户登出'
-            ],
-            'user' => [
-                'GET /user/info' => '获取用户信息',
-                'POST /user/update' => '更新用户信息',
-                'GET /user/technologies' => '获取技术栈列表',
-                'GET /user/map-data' => '获取地图数据'
-            ],
-            'project' => [
-                'GET /project/list' => '获取项目列表',
-                'GET /project/detail/:id' => '获取项目详情',
-                'GET /project/categories' => '获取项目分类',
-                'GET /project/featured' => '获取首页推荐项目',
-                'POST /project/create' => '创建项目',
-                'POST /project/update/:id' => '更新项目',
-                'DELETE /project/delete/:id' => '删除项目',
-                'POST /project/status/:id' => '更新项目状态'
-            ],
-            'contact' => [
-                'GET /contact/info' => '获取联系信息',
-                'POST /contact/update' => '更新联系信息',
-                'GET /contact/messages' => '获取留言列表',
-                'POST /contact/message' => '提交留言',
-                'POST /contact/read/:id' => '标记留言为已读',
-                'DELETE /contact/message/:id' => '删除留言',
-                'GET /contact/stats' => '获取留言统计',
-                'POST /contact/batch-read' => '批量标记为已读',
-                'POST /contact/batch-delete' => '批量删除留言'
-            ],
-            'admin' => [
-                'POST /admin/login' => '管理员登录',
-                'GET /admin/dashboard' => '获取仪表盘数据',
-                'GET /admin/stats' => '获取系统统计',
-                'GET /admin/visit-trend' => '获取访问趋势',
-                'GET /admin/popular-pages' => '获取热门页面',
-                'GET /admin/system-info' => '获取系统信息'
-            ],
-            'visit' => [
-                'POST /visit/log' => '记录访问日志',
-                'GET /visit/stats' => '获取访问统计',
-                'GET /visit/trend' => '获取访问趋势',
-                'GET /visit/realtime' => '获取实时访问数据',
-                'GET /visit/geo' => '获取地理位置统计'
-            ]
-        ]
+        'timestamp' => date('Y-m-d H:i:s')
     ]);
 });
