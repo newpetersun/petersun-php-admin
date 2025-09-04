@@ -11,10 +11,12 @@
 use think\facade\Route;
 
 // 全局CORS中间件
-    // 认证相关接口（无需认证）
-    Route::group('auth', function () {
-        Route::post('login', 'Auth/login'); // 用户登录
-        Route::post('register', 'Auth/register'); // 用户注册
+    
+    // 微信登录相关接口（无需认证）
+    Route::group('wechat', function () {
+        Route::post('login', 'WechatAuth/login'); // 微信登录
+        Route::post('complete-info', 'WechatAuth/completeUserInfo'); // 完善用户信息
+        Route::get('verify-token', 'WechatAuth/verifyToken'); // 验证token
     });
     
     // 需要认证的接口
@@ -30,6 +32,10 @@ use think\facade\Route;
         Route::post('update', 'User/update'); // 更新用户信息
         Route::get('technologies', 'User/technologies'); // 获取技术栈列表
         Route::get('map-data', 'User/mapData'); // 获取地图数据
+        Route::post('save-info', 'User/saveUserInfo'); // 保存微信用户信息
+        Route::get('get-info', 'User/getUserInfo'); // 获取微信用户信息
+        Route::post('update-stats', 'User/updateUserStats'); // 更新用户统计信息
+        Route::post('upload-avatar', 'User/uploadAvatar'); // 上传用户头像
     });
     
     // 项目相关接口需鉴权
@@ -75,13 +81,24 @@ use think\facade\Route;
     
     // 后台管理接口
     Route::group('admin', function () {
-        Route::post('login', 'Admin/login'); // 管理员登录
         Route::get('dashboard', 'Admin/dashboard'); // 获取仪表盘数据
         Route::get('stats', 'Admin/stats'); // 获取系统统计
         Route::get('visit-trend', 'Admin/visitTrend'); // 获取访问趋势
         Route::get('popular-pages', 'Admin/popularPages'); // 获取热门页面
         Route::get('system-info', 'Admin/systemInfo'); // 获取系统信息
-    });
+    })->middleware(['JwtAuth', 'AdminAuth']);
+    
+    // 系统设置接口
+    Route::group('setting', function () {
+        Route::get('list', 'Setting/getSettings'); // 获取系统设置
+        Route::post('update', 'Setting/updateSettings'); // 更新系统设置
+        Route::get('system-info', 'Setting/getSystemInfo'); // 获取系统信息
+        Route::post('backup', 'Setting/backupData'); // 备份数据
+        Route::post('restore', 'Setting/restoreData'); // 恢复数据
+        Route::post('clear-cache', 'Setting/clearCache'); // 清除缓存
+        Route::get('backup-list', 'Setting/getBackupList'); // 获取备份列表
+        Route::delete('backup/:filename', 'Setting/deleteBackup'); // 删除备份文件
+    })->middleware(['JwtAuth', 'AdminAuth']);
     
     // 访问统计接口
     Route::group('visit', function () {
@@ -101,6 +118,55 @@ use think\facade\Route;
         Route::post('update/:id', 'Category/update'); // 更新分类
         Route::delete('delete/:id', 'Category/delete'); // 删除分类
         Route::post('status/:id', 'Category/status'); // 更新分类状态
+    })->middleware(['JwtAuth', 'AdminAuth']);
+    
+    // 技术管理接口
+    Route::group('technology', function () {
+        Route::get('list', 'Technology/list'); // 获取技术列表
+        Route::get('detail/:id', 'Technology/detail'); // 获取技术详情
+        Route::post('create', 'Technology/create'); // 创建技术
+        Route::post('update/:id', 'Technology/update'); // 更新技术
+        Route::delete('delete/:id', 'Technology/delete'); // 删除技术
+        Route::post('status/:id', 'Technology/status'); // 更新技术状态
+        Route::post('upload-image', 'Technology/uploadImage'); // 上传技术图标
+        Route::get('categories', 'Technology/categories'); // 获取技术分类列表
+        Route::post('batch-delete', 'Technology/batchDelete'); // 批量删除技术
+        Route::post('batch-status', 'Technology/batchStatus'); // 批量更新技术状态
+    })->middleware(['JwtAuth', 'AdminAuth']);
+    
+    // 客户管理接口
+    Route::group('client', function () {
+        Route::get('list', 'Client/list'); // 获取客户列表
+        Route::get('detail/:id', 'Client/detail'); // 获取客户详情
+        Route::post('status/:id', 'Client/updateStatus'); // 更新客户状态
+        Route::get('projects/:id', 'Client/projects'); // 获取客户的项目列表
+    })->middleware(['JwtAuth', 'AdminAuth']);
+    
+    // 项目进度管理接口
+    Route::group('progress', function () {
+        Route::get('requirements/:project_id', 'Progress/getRequirements'); // 获取项目需求列表
+        Route::get('requirement/:id', 'Progress/getRequirementDetail'); // 获取需求详情
+        Route::post('requirement', 'Progress/createRequirement'); // 创建需求
+        Route::put('requirement/:id', 'Progress/updateRequirement'); // 更新需求
+        Route::delete('requirement/:id', 'Progress/deleteRequirement'); // 删除需求
+        Route::get('stats/:project_id', 'Progress/getRequirementStats'); // 获取需求统计
+        
+        // 需求模板管理
+        Route::get('templates', 'Progress/getTemplates'); // 获取需求模板列表
+        Route::post('template', 'Progress/createTemplate'); // 创建需求模板
+        
+        // 工程师管理
+        Route::get('engineers', 'Progress/getEngineers'); // 获取工程师列表
+        
+        // 工时管理
+        Route::post('time-log', 'Progress/addTimeLog'); // 添加工时记录
+        
+        // 评论管理
+        Route::post('comment', 'Progress/addComment'); // 添加评论
+        
+        // 附件管理
+        Route::post('attachment/:requirement_id', 'Progress/uploadAttachment'); // 上传附件
+        Route::delete('attachment/:id', 'Progress/deleteAttachment'); // 删除附件
     })->middleware('JwtAuth');
 // 默认路由
 Route::get('/', function () {

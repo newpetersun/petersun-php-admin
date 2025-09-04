@@ -39,7 +39,7 @@ class User extends Model
     protected $updateTime = 'updated_at';
     
     // 隐藏字段
-    protected $hidden = ['password'];
+    protected $hidden = ['openid'];
     
     // 类型转换
     protected $type = [

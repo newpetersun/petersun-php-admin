@@ -24,76 +24,15 @@ class Auth extends BaseController
     }
     
     /**
-     * 用户登录
+     * 用户登录（已废弃，统一使用微信登录）
      * @param Request $request
      * @return Response
      */
     public function login(Request $request): Response
     {
-        $data = $request->post();
-        
-        // 验证输入
-        $validate = Validate::rule([
-            'username' => 'require|length:3,50',
-            'password' => 'require|length:6,50',
-        ])->message([
-            'username.require' => '用户名不能为空',
-            'username.length' => '用户名长度必须在3-50个字符之间',
-            'password.require' => '密码不能为空',
-            'password.length' => '密码长度必须在6-50个字符之间',
-        ]);
-        
-        if (!$validate->check($data)) {
-            return json(['code' => 400, 'message' => $validate->getError()]);
-        }
-        
-        $username = $data['username'];
-        $password = $data['password'];
-        
-        // 查找用户
-        $user = User::findByUsername($username);
-        if (!$user) {
-            return json(['code' => 401, 'message' => '用户名或密码错误']);
-        }
-        
-        // 验证密码
-        if (!User::verifyPassword($password, $user->password)) {
-            return json(['code' => 401, 'message' => '用户名或密码错误']);
-        }
-        
-        // 检查用户状态
-        if ($user->status != 1) {
-            return json(['code' => 403, 'message' => '账户已被禁用']);
-        }
-        
-        // 更新登录信息
-        $user->updateLoginInfo($request->ip());
-        
-        // 生成JWT token
-        $token = $this->jwtService->generateToken([
-            'user_id' => $user->id,
-            'username' => $user->username,
-        ]);
-        
         return json([
-            'code' => 200,
-            'message' => '登录成功',
-            'data' => [
-                'token' => $token,
-                'user' => [
-                    'id' => $user->id,
-                    'username' => $user->username,
-                    'email' => $user->email,
-                    'nickname' => $user->nickname,
-                    'name' => $user->name,
-                    'code_age' => $user->code_age,
-                    'description' => $user->description,
-                    'avatar' => $user->avatar,
-                    'github' => $user->github,
-                    'wechat' => $user->wechat,
-                    'last_login_time' => $user->last_login_time,
-                ]
-            ]
+            'code' => 400, 
+            'message' => '用户名密码登录已废弃，请使用微信小程序登录'
         ]);
     }
     
@@ -128,38 +67,10 @@ class Auth extends BaseController
             return json(['code' => 400, 'message' => $validate->getError()]);
         }
         
-        // 检查用户名是否已存在
-        if (User::findByUsername($data['username'])) {
-            return json(['code' => 400, 'message' => '用户名已存在']);
-        }
-        
-        // 检查邮箱是否已存在
-        if (!empty($data['email']) && User::findByEmail($data['email'])) {
-            return json(['code' => 400, 'message' => '邮箱已存在']);
-        }
-        
-        // 创建用户
-        $user = new User();
-        $user->username = $data['username'];
-        $user->password = User::hashPassword($data['password']);
-        $user->email = $data['email'] ?? '';
-        $user->nickname = $data['nickname'] ?? $data['username'];
-        $user->status = 1;
-        
-        if ($user->save()) {
-            return json([
-                'code' => 200,
-                'message' => '注册成功',
-                'data' => [
-                    'id' => $user->id,
-                    'username' => $user->username,
-                    'email' => $user->email,
-                    'nickname' => $user->nickname,
-                ]
-            ]);
-        } else {
-            return json(['code' => 500, 'message' => '注册失败']);
-        }
+        return json([
+            'code' => 400, 
+            'message' => '用户注册已废弃，请使用微信小程序登录'
+        ]);
     }
     
     /**
@@ -181,7 +92,8 @@ class Auth extends BaseController
             $payload = $this->jwtService->verifyToken($token);
             $userId = $payload->user_id;
             
-            $user = User::find($userId);
+            // 使用统一的 users 表
+            $user = \think\facade\Db::name('users')->where('id', $userId)->find();
             if (!$user) {
                 return json(['code' => 404, 'message' => '用户不存在']);
             }
@@ -190,20 +102,23 @@ class Auth extends BaseController
                 'code' => 200,
                 'message' => '获取成功',
                 'data' => [
-                    'id' => $user->id,
-                    'username' => $user->username,
-                    'email' => $user->email,
-                    'nickname' => $user->nickname,
-                    'name' => $user->name,
-                    'code_age' => $user->code_age,
-                    'description' => $user->description,
-                    'avatar' => $user->avatar,
-                    'github' => $user->github,
-                    'wechat' => $user->wechat,
-                    'status' => $user->status,
-                    'last_login_time' => $user->last_login_time,
-                    'last_login_ip' => $user->last_login_ip,
-                    'created_at' => $user->created_at,
+                    'id' => $user['id'],
+                    'openid' => $user['openid'],
+                    'nickname' => $user['nickname'],
+                    'avatar' => $user['avatar'],
+                    'email' => $user['email'],
+                    'phone' => $user['phone'],
+                    'qq' => $user['qq'],
+                    'wechat' => $user['wechat'],
+                    'github' => $user['github'],
+                    'web_url' => $user['web_url'],
+                    'user_type' => $user['user_type'],
+                    'status' => $user['status'],
+                    'role' => $user['role'],
+                    'visit_count' => $user['visit_count'],
+                    'like_count' => $user['like_count'],
+                    'last_login_time' => $user['last_login_time'],
+                    'create_time' => $user['create_time'],
                 ]
             ]);
         } catch (\Exception $e) {

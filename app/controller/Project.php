@@ -17,12 +17,16 @@ class Project extends BaseController
     {
         try {
             $category = $request->param('category', '');
+            $client_id = $request->param('client_id', '');
             $page = $request->param('page', 1);
             $limit = $request->param('limit', 10);
             
             $where = [];
             if (!empty($category) && $category !== 'all') {
                 $where[] = ['category', '=', $category];
+            }
+            if (!empty($client_id)) {
+                $where[] = ['client_id', '=', $client_id];
             }
             $where[] = ['status', '=', 1]; // 只显示已发布的项目
             
@@ -52,7 +56,9 @@ class Project extends BaseController
                     ->alias('pt')
                     ->join('technology t', 'pt.technology_id = t.id')
                     ->where('pt.project_id', $project['id'])
-                    ->column('t.name');
+                    ->field('t.id, t.name, t.img, t.status')
+                    ->select()
+                    ->toArray();
                 $project['technologies'] = $technologies;
                 
                 // 获取项目所有图片
@@ -72,6 +78,18 @@ class Project extends BaseController
                 
                 // 格式化时间
                 $project['create_time'] = date('Y-m-d', strtotime($project['create_time']));
+                
+                // 获取关联的客户信息
+                if (!empty($project['client_id'])) {
+                    $client = Db::name('users')
+                        ->where('id', $project['client_id'])
+                        ->where('user_type', 'wechat')
+                        ->field('id, nickname as name, avatar')
+                        ->find();
+                    $project['client'] = $client;
+                } else {
+                    $project['client'] = null;
+                }
             }
             
             return json([
@@ -113,7 +131,9 @@ class Project extends BaseController
                 ->alias('pt')
                 ->join('technology t', 'pt.technology_id = t.id')
                 ->where('pt.project_id', $id)
-                ->column('t.name');
+                ->field('t.id, t.name, t.img, t.status')
+                ->select()
+                ->toArray();
             
             // 获取项目功能特性
             $features = explode(',', $project['features']);
@@ -125,10 +145,61 @@ class Project extends BaseController
                 ->order('sort_order', 'asc')
                 ->column('image_url');
             
+            // 获取项目需求列表
+            $requirements = Db::name('project_requirements')
+                ->where('project_id', $id)
+                ->order('create_time', 'desc')
+                ->select()
+                ->toArray();
+                
+            // 获取关联的客户信息
+            $client = null;
+            if (!empty($project['client_id'])) {
+                $client = Db::name('users')
+                    ->where('id', $project['client_id'])
+                    ->where('user_type', 'wechat')
+                    ->field('id, nickname as name, avatar, phone, email, province, city')
+                    ->find();
+            }
+            
+            // 处理需求数据，添加状态和优先级的文本描述
+            foreach ($requirements as &$requirement) {
+                // 添加状态文本
+                $statusMap = [
+                    'pending' => '待开始',
+                    'progress' => '进行中',
+                    'completed' => '已完成',
+                    'cancelled' => '已取消'
+                ];
+                $requirement['status_text'] = $statusMap[$requirement['status']] ?? '未知';
+                
+                // 添加优先级文本
+                $priorityMap = [
+                    'low' => '低',
+                    'medium' => '中',
+                    'high' => '高',
+                    'urgent' => '紧急'
+                ];
+                $requirement['priority_text'] = $priorityMap[$requirement['priority']] ?? '未知';
+                
+                // 计算进度百分比
+                if ($requirement['estimated_hours'] && $requirement['actual_hours']) {
+                    $requirement['progress_percent'] = min(round(($requirement['actual_hours'] / $requirement['estimated_hours']) * 100), 100);
+                } else {
+                    $requirement['progress_percent'] = 0;
+                }
+                
+                // 格式化时间
+                $requirement['create_time_formatted'] = date('Y-m-d H:i', strtotime($requirement['create_time']));
+                $requirement['update_time_formatted'] = date('Y-m-d H:i', strtotime($requirement['update_time']));
+            }
+            
             $project['tags'] = $tags;
             $project['technologies'] = $technologies;
             $project['features'] = $features;
             $project['images'] = $images; // 添加图片数组
+            $project['requirements'] = $requirements; // 添加需求数组
+            $project['client'] = $client; // 添加客户信息
             $project['create_time'] = date('Y-m-d', strtotime($project['create_time']));
             
             return json([
@@ -194,6 +265,28 @@ class Project extends BaseController
                     ->where('pt.project_id', $project['id'])
                     ->column('t.name');
                 $project['tags'] = $tags;
+                
+                // 获取项目技术栈
+                $technologies = Db::name('project_technology')
+                    ->alias('pt')
+                    ->join('technology t', 'pt.technology_id = t.id')
+                    ->where('pt.project_id', $project['id'])
+                    ->field('t.id, t.name, t.img, t.status')
+                    ->select()
+                    ->toArray();
+                $project['technologies'] = $technologies;
+                
+                // 获取关联的客户信息
+                if (!empty($project['client_id'])) {
+                    $client = Db::name('users')
+                        ->where('id', $project['client_id'])
+                        ->where('user_type', 'wechat')
+                        ->field('id, nickname as name, avatar')
+                        ->find();
+                    $project['client'] = $client;
+                } else {
+                    $project['client'] = null;
+                }
             }
             
             return json([
@@ -213,7 +306,7 @@ class Project extends BaseController
     {
         try {
             $data = $request->only([
-                'title', 'description', 'full_description', 'image', 'images', 'category_id',
+                'title', 'description', 'full_description', 'image', 'images', 'category_id', 'client_id',
                 'tags', 'technologies', 'features', 'sort_order', 'is_featured'
             ]);
             
@@ -236,6 +329,7 @@ class Project extends BaseController
                     'full_description' => $data['full_description'] ?? '',
                     'image' => $data['image'] ?? '',
                     'category_id' => $data['category_id'] ?? 1,
+                    'client_id' => $data['client_id'] ?? null,
                     'features' => is_array($data['features']) ? implode(',', $data['features']) : '',
                     'sort_order' => $data['sort_order'] ?? 0,
                     'is_featured' => $data['is_featured'] ?? 0,
@@ -298,7 +392,7 @@ class Project extends BaseController
     {
         try {
             $data = $request->only([
-                'title', 'description', 'full_description', 'image', 'images', 'category_id',
+                'title', 'description', 'full_description', 'image', 'images', 'category_id', 'client_id',
                 'tags', 'technologies', 'features', 'sort_order', 'is_featured'
             ]);
             
@@ -321,6 +415,7 @@ class Project extends BaseController
                     'full_description' => $data['full_description'] ?? '',
                     'image' => $data['image'] ?? '',
                     'category_id' => $data['category_id'] ?? 1,
+                    'client_id' => $data['client_id'] ?? null,
                     'features' => is_array($data['features']) ? implode(',', $data['features']) : '',
                     'sort_order' => $data['sort_order'] ?? 0,
                     'is_featured' => $data['is_featured'] ?? 0,

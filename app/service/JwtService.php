@@ -32,22 +32,25 @@ class JwtService
     
     public function __construct()
     {
-        $this->secret = 'your-super-secret-jwt-key-change-in-production';
+        $this->secret = 'v3VlQJJQV#h~1ycA8Ii1i5ybK0iZNMB60uv~c^)i1I!z^)8mypnxE&sQRlL%EB6m';
         $this->algorithm = 'HS256';
-        $this->expireTime = 7200; // 默认2小时
+        $this->expireTime = 604800; // 默认7天
     }
     
     /**
      * 生成JWT token
      * @param array $payload
+     * @param int|null $expireTime 自定义过期时间（秒）
      * @return string
      */
-    public function generateToken(array $payload): string
+    public function generateToken(array $payload, ?int $expireTime = null): string
     {
         $time = time();
+        $expire = $expireTime ?? $this->expireTime;
+        
         $payload = array_merge([
             'iat' => $time,        // 签发时间
-            'exp' => $time + $this->expireTime, // 过期时间
+            'exp' => $time + $expire, // 过期时间
             'nbf' => $time,        // 生效时间
         ], $payload);
         

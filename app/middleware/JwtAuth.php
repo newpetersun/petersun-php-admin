@@ -36,7 +36,7 @@ class JwtAuth
             
             // 将用户信息添加到请求中
             $request->userId = $payload->user_id;
-            $request->username = $payload->username;
+            $request->userType = $payload->type ?? 'wechat_user';
             
             return $next($request);
         } catch (\Exception $e) {

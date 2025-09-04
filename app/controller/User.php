@@ -11,6 +11,9 @@ use app\model\User as UserModel;
 
 class User extends BaseController
 {
+	public function index(){
+		return json(['code' => 200, 'message' => '用户管理接口']);
+	}
     /**
      * 获取用户信息（单个）
      */
@@ -34,6 +37,7 @@ class User extends BaseController
 
     /**
      * 获取用户列表（支持筛选、分页、搜索）
+     * 更新：使用统一的 users 表
      */
     public function list(Request $request): Response
     {
@@ -41,23 +45,26 @@ class User extends BaseController
             $keyword = $request->param('keyword', '');
             $role = $request->param('role', '');
             $status = $request->param('status', '');
+            $userType = $request->param('user_type', '');
             $page = $request->param('page', 1);
             $limit = $request->param('limit', 10);
 
             $where = [];
             if ($keyword) {
-                $where[] = ['username|email', 'like', "%$keyword%"];
+                $where[] = ['nickname', 'like', "%$keyword%"];
             }
             if ($role && $role !== '全部角色') {
                 $where[] = ['role', '=', $role];
             }
             if ($status && $status !== '全部状态') {
-                $where[] = ['status', '=', $status === '活跃' ? 'active' : 'inactive'];
+                $where[] = ['status', '=', $status === '活跃' ? 1 : 0];
+            }
+            if ($userType && $userType !== '全部类型') {
+                $where[] = ['user_type', '=', $userType];
             }
 
-            $users = Db::name('users')
-                ->where($where)
-                ->order('id', 'asc')
+            $users = Db::name('users')->where($where)
+                ->order('id', 'desc')
                 ->paginate([
                     'list_rows' => $limit,
                     'page' => $page
@@ -80,24 +87,22 @@ class User extends BaseController
     }
 
     /**
-     * 新增用户
+     * 新增用户（管理员手动创建）
+     * 更新：使用统一的 users 表
      */
     public function create(Request $request): Response
     {
         try {
-            $data = $request->only(['username', 'email', 'role', 'status', 'avatar']);
-            if (empty($data['username']) || empty($data['email'])) {
-                return json(['code' => 400, 'message' => '用户名和邮箱不能为空']);
+            $data = $request->only(['nickname', 'role', 'status', 'avatar', 'email', 'phone', 'qq', 'wechat', 'github', 'web_url']);
+            if (empty($data['nickname'])) {
+                return json(['code' => 400, 'message' => '昵称不能为空']);
             }
-            if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-                return json(['code' => 400, 'message' => '邮箱格式不正确']);
-            }
-            // 检查用户名是否重复
-            $exists = Db::name('users')->where('username', $data['username'])->find();
-            if ($exists) {
-                return json(['code' => 400, 'message' => '用户名已存在']);
-            }
-            $data['role'] = $data['role'] ?? '访客';
+            
+            $data['user_type'] = 'admin';
+            $data['status'] = $data['status'] ?? 1;
+            $data['role'] = $data['role'] ?? '管理员';
+            $data['create_time'] = date('Y-m-d H:i:s');
+            $data['update_time'] = date('Y-m-d H:i:s');
             // 修正 status 字段为 1/0
             if (isset($data['status'])) {
                 if ($data['status'] === 'active') {
@@ -139,22 +144,13 @@ class User extends BaseController
 
     /**
      * 编辑用户（支持指定ID，兼容原有字段）
+     * 更新：使用统一的 users 表，移除密码相关字段
      */
     public function update(Request $request): Response
     {
         try {
-            $id = $request->param('id', 1);
-            $data = $request->only(['username', 'email', 'role', 'status', 'avatar', 'name', 'code_age', 'description', 'github', 'wechat']);
-            // 兼容前端字段
-            if (isset($data['name']) && !isset($data['username'])) {
-                $data['username'] = $data['name'];
-            }
-            if (empty($data['username']) || empty($data['email'])) {
-                return json(['code' => 400, 'message' => '用户名和邮箱不能为空']);
-            }
-            if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-                return json(['code' => 400, 'message' => '邮箱格式不正确']);
-            }
+            $id = $request->param('id');
+            $data = $request->only(['role', 'status', 'avatar', 'nickname', 'email', 'phone', 'qq', 'wechat', 'github', 'web_url', 'working_hours']);
             if (isset($data['status'])) {
                 if ($data['status'] === 'active') {
                     $data['status'] = 1;
@@ -162,7 +158,7 @@ class User extends BaseController
                     $data['status'] = 0;
                 }
             }
-            $data['updated_at'] = date('Y-m-d H:i:s');
+            $data['update_time'] = date('Y-m-d H:i:s');
             $result = Db::name('users')->where('id', $id)->update($data);
             if ($result !== false) {
                 return json(['code' => 200, 'message' => '更新成功']);
@@ -180,29 +176,13 @@ class User extends BaseController
     public function technologies(): Response
     {
         try {
-            $technologies = [
-                ['img' => '/static/images/exp/html.png', 'name' => 'HTML'],
-                ['img' => '/static/images/exp/php.png', 'name' => 'PHP'],
-                ['img' => '/static/images/exp/vue.png', 'name' => 'Vue'],
-                ['img' => '/static/images/exp/java.png', 'name' => 'Java'],
-                ['img' => '/static/images/exp/python.png', 'name' => 'Python'],
-                ['img' => '/static/images/exp/thinkphp.png', 'name' => 'ThinkPHP'],
-                ['img' => '/static/images/exp/laravel.png', 'name' => 'Laravel'],
-                ['img' => '/static/images/exp/bootstrap.png', 'name' => 'BootStrap'],
-                ['img' => '/static/images/exp/webpack.png', 'name' => 'Webpack'],
-                ['img' => '/static/images/exp/vite.png', 'name' => 'Vite'],
-                ['img' => '/static/images/exp/fastadmin.png', 'name' => 'FastAdmin'],
-                ['img' => '/static/images/exp/uniapp.png', 'name' => 'Uniapp'],
-                ['img' => '/static/images/exp/flutter.png', 'name' => 'Flutter'],
-                ['img' => '/static/images/exp/pycharm.png', 'name' => 'PyCharm'],
-                ['img' => '/static/images/exp/ps.png', 'name' => 'PS'],
-                ['img' => '/static/images/exp/pr.png', 'name' => 'PR'],
-                ['img' => '/static/images/exp/ai.png', 'name' => 'AI'],
-                ['img' => '/static/images/exp/c4d.png', 'name' => 'C4D'],
-                ['img' => '/static/images/exp/figma.png', 'name' => 'Figma'],
-                ['img' => '/static/images/exp/sketch.png', 'name' => 'Sketch'],
-                ['img' => '/static/images/exp/fastapi.png', 'name' => 'FastAPI']
-            ];
+            // 从technology表中获取启用的技术
+            $technologies = Db::name('technology')
+                ->field('id, name, img, sort_order')
+                ->where('status', 1)
+                ->order('id', 'asc')
+                ->select()
+                ->toArray();
             
             return json([
                 'code' => 200,
@@ -263,7 +243,6 @@ class User extends BaseController
             if (!$file) {
                 return json(['code' => 400, 'message' => '未上传文件']);
             }
-            // 保存到 public/static/images/avatar 目录，自动重命名为规范图片名
             $savePath = '/static/images/avatar/';
             $ext = $file->getOriginalExtension();
             $filename = uniqid('avatar_') . '.' . $ext;
@@ -274,6 +253,162 @@ class User extends BaseController
             } else {
                 return json(['code' => 500, 'message' => $file->getError()]);
             }
+        } catch (\Exception $e) {
+            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
+        }
+    }
+
+
+
+    /**
+     * 保存用户信息
+     */
+    public function saveUserInfo(Request $request): Response
+    {
+        try {
+            $data = $request->only([
+                'nickName', 'avatarUrl', 'gender', 'country', 'province', 
+                'city', 'language', 'visitCount', 'likeCount', 'loginTime'
+            ]);
+            
+            // 生成唯一用户ID（基于微信信息）
+            $userKey = md5($data['nickName'] . $data['avatarUrl']);
+            
+            // 检查用户是否已存在 - 使用统一的 users 表
+            $existingUser = Db::name('users')->where('user_key', $userKey)->find();
+            
+            if ($existingUser) {
+                // 更新用户信息
+                $updateData = [
+                    'nickname' => $data['nickName'],
+                    'avatar' => $data['avatarUrl'], // 字段名统一为 avatar
+                    'gender' => $data['gender'] ?? 0,
+                    'country' => $data['country'] ?? '',
+                    'province' => $data['province'] ?? '',
+                    'city' => $data['city'] ?? '',
+                    'language' => $data['language'] ?? '',
+                    'visit_count' => $data['visitCount'] ?? 0,
+                    'like_count' => $data['likeCount'] ?? 0,
+                    'last_login_time' => date('Y-m-d H:i:s'),
+                    'update_time' => date('Y-m-d H:i:s')
+                ];
+                
+                Db::name('users')->where('id', $existingUser['id'])->update($updateData);
+                $userId = $existingUser['id'];
+            } else {
+                // 创建新用户
+                $insertData = [
+                    'user_key' => $userKey,
+                    'nickname' => $data['nickName'],
+                    'avatar' => $data['avatarUrl'], // 字段名统一为 avatar
+                    'gender' => $data['gender'] ?? 0,
+                    'country' => $data['country'] ?? '',
+                    'province' => $data['province'] ?? '',
+                    'city' => $data['city'] ?? '',
+                    'language' => $data['language'] ?? '',
+                    'visit_count' => $data['visitCount'] ?? 0,
+                    'like_count' => $data['likeCount'] ?? 0,
+                    'user_type' => 'wechat', // 统一用户类型
+                    'status' => 1,
+                    'role' => '访客',
+                    'create_time' => date('Y-m-d H:i:s'),
+                    'update_time' => date('Y-m-d H:i:s')
+                ];
+                
+                $userId = Db::name('users')->insertGetId($insertData);
+            }
+            
+            return json([
+                'code' => 200,
+                'message' => '保存成功',
+                'data' => [
+                    'user_id' => $userId,
+                    'user_key' => $userKey
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 获取用户信息
+     */
+    public function getUserInfo(Request $request): Response
+    {
+        try {
+            $userKey = $request->param('user_key', '');
+            
+            if (empty($userKey)) {
+                return json(['code' => 400, 'message' => '用户标识不能为空']);
+            }
+            
+            $user = Db::name('users')->where('user_key', $userKey)->find();
+            
+            if (!$user) {
+                return json(['code' => 404, 'message' => '用户不存在']);
+            }
+            
+            return json([
+                'code' => 200,
+                'message' => '获取成功',
+                'data' => [
+                    'nickName' => $user['nickname'],
+                    'avatarUrl' => $user['avatar'],
+                    'gender' => $user['gender'],
+                    'country' => $user['country'],
+                    'province' => $user['province'],
+                    'city' => $user['city'],
+                    'language' => $user['language'],
+                    'visitCount' => $user['visit_count'],
+                    'likeCount' => $user['like_count'],
+                    'createTime' => $user['create_time'],
+                    'lastLoginTime' => $user['last_login_time']
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 更新用户统计信息
+     */
+    public function updateUserStats(Request $request): Response
+    {
+        try {
+            $userKey = $request->param('user_key', '');
+            $type = $request->param('type', ''); // 'visit' 或 'like'
+            
+            if (empty($userKey) || empty($type)) {
+                return json(['code' => 400, 'message' => '参数不完整']);
+            }
+            
+            $user = Db::name('users')->where('user_key', $userKey)->find();
+            
+            if (!$user) {
+                return json(['code' => 404, 'message' => '用户不存在']);
+            }
+            
+            $updateData = [
+                'update_time' => date('Y-m-d H:i:s')
+            ];
+            
+            if ($type === 'visit') {
+                $updateData['visit_count'] = $user['visit_count'] + 1;
+            } elseif ($type === 'like') {
+                $updateData['like_count'] = $user['like_count'] + 1;
+            } else {
+                return json(['code' => 400, 'message' => '无效的统计类型']);
+            }
+            
+            Db::name('users')->where('id', $user['id'])->update($updateData);
+            
+            return json([
+                'code' => 200,
+                'message' => '更新成功',
+                'data' => $updateData
+            ]);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
         }
