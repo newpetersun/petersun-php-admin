@@ -7,13 +7,14 @@ use app\BaseController;
 use think\Request;
 use think\facade\Db;
 use think\facade\Cache;
+use think\response\Json;
 
 class Setting extends BaseController
 {
     /**
      * 获取系统设置
      */
-    public function getSettings(Request $request): Response
+    public function getSettings(Request $request): Json
     {
         try {
             $group = $request->param('group', '');
@@ -51,7 +52,7 @@ class Setting extends BaseController
     /**
      * 更新系统设置
      */
-    public function updateSettings(Request $request): Response
+    public function updateSettings(Request $request): Json
     {
         try {
             $settings = $request->param('settings', []);
@@ -103,7 +104,7 @@ class Setting extends BaseController
     /**
      * 获取系统信息
      */
-    public function getSystemInfo(): Response
+    public function getSystemInfo(): Json
     {
         try {
             // 安全获取磁盘空间信息
@@ -138,7 +139,7 @@ class Setting extends BaseController
     /**
      * 备份数据
      */
-    public function backupData(): Response
+    public function backupData(): Json
     {
         try {
             $backupPath = $this->getSettingValue('backup_path', '/backups/');
@@ -183,7 +184,7 @@ class Setting extends BaseController
     /**
      * 恢复数据
      */
-    public function restoreData(Request $request): Response
+    public function restoreData(Request $request): Json
     {
         try {
             $backupFile = $request->param('backup_file', '');
@@ -224,7 +225,7 @@ class Setting extends BaseController
     /**
      * 清除缓存
      */
-    public function clearCache(): Response
+    public function clearCache(): Json
     {
         try {
             // 清除各种缓存
@@ -251,7 +252,7 @@ class Setting extends BaseController
     /**
      * 获取备份列表
      */
-    public function getBackupList(): Response
+    public function getBackupList(): Json
     {
         try {
             $backupPath = $this->getSettingValue('backup_path', '/backups/');
@@ -287,7 +288,7 @@ class Setting extends BaseController
     /**
      * 删除备份文件
      */
-    public function deleteBackup(Request $request): Response
+    public function deleteBackup(Request $request): Json
     {
         try {
             $filename = $request->param('filename', '');

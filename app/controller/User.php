@@ -150,7 +150,7 @@ class User extends BaseController
     {
         try {
             $id = $request->param('id');
-            $data = $request->only(['role', 'status', 'avatar', 'nickname', 'email', 'phone', 'qq', 'wechat', 'github', 'web_url', 'working_hours']);
+            $data = $request->only(['role', 'status', 'avatar', 'nickname', 'code_age' ,'email', 'phone', 'qq', 'wechat', 'github', 'web_url', 'working_hours']);
             if (isset($data['status'])) {
                 if ($data['status'] === 'active') {
                     $data['status'] = 1;
