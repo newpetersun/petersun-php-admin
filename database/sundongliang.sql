@@ -307,6 +307,7 @@ CREATE TABLE `users` (
   `nickname` varchar(100) NOT NULL COMMENT '用户昵称',
   `code_age` int(11) NOT NULL COMMENT '码龄',
   `avatar` varchar(500) DEFAULT NULL COMMENT '头像URL',
+  `cover` varchar(500) DEFAULT NULL COMMENT '封面图URL',
   `gender` tinyint(1) DEFAULT '0' COMMENT '性别：0未知，1男，2女',
   `country` varchar(50) DEFAULT '' COMMENT '国家',
   `province` varchar(50) DEFAULT '' COMMENT '省份',
@@ -326,6 +327,8 @@ CREATE TABLE `users` (
   `qq` varchar(20) DEFAULT NULL COMMENT 'QQ号',
   `wechat` varchar(50) DEFAULT NULL COMMENT '微信号',
   `github` varchar(255) DEFAULT NULL COMMENT 'GitHub地址',
+  `weibo` varchar(255) DEFAULT NULL COMMENT '微博地址',
+  `douyin` varchar(255) DEFAULT NULL COMMENT '抖音号',
   `web_url` varchar(255) DEFAULT NULL COMMENT '个人网站',
   `working_hours` json DEFAULT NULL COMMENT '工作时间',
   `last_login_time` datetime DEFAULT NULL COMMENT '最后登录时间',
@@ -334,8 +337,8 @@ CREATE TABLE `users` (
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='统一用户表' ROW_FORMAT=DYNAMIC;
 
-INSERT INTO `users` (`id`, `openid`, `user_key`, `nickname`, `code_age`, `avatar`, `gender`, `country`, `province`, `city`, `language`, `visit_count`, `like_count`, `token`, `token_expire_time`, `is_new_user`, `is_engineer`, `user_type`, `status`, `role`, `email`, `phone`, `qq`, `wechat`, `github`, `web_url`, `working_hours`, `last_login_time`, `last_login_ip`, `create_time`, `update_time`) VALUES
-(1, 'ocAWa4jVUL8Lp9eiqkRbMjYkjq28', 'e2d2eb129b794b0a45b39881aa8161e3', 'PeterSun', 9, '/static/images/avatar/avatar_695b5aec7ffd9.jpg', 0, '', '', '', 'zh_CN', 0, 0, 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3Njc1OTcyMjcsImV4cCI6MTc2ODIwMjAyNywibmJmIjoxNzY3NTk3MjI3LCJ1c2VyX2lkIjoxLCJ0eXBlIjoidXNlciJ9.JoOeR4H5Xw0XpGs6Cm1Sz7dtAdQditfuf0-bliPc8Ts', '2026-01-12 15:13:47', 0, 0, 'admin', 1, '访客', 'cto@cvun.net', '15993113751', '21312314', 'cto-peter', '', '', '[{\"day\": \"工作日\", \"time\": \"09:00 - 18:00\"}, {\"day\": \"周六\", \"time\": \"10:00 - 16:00\"}, {\"day\": \"周日\", \"time\": \"休息\"}]', '2026-01-05 15:13:47', '127.0.0.1', '2025-09-02 03:34:25', '2026-01-05 15:13:47');
+INSERT INTO `users` (`id`, `openid`, `user_key`, `nickname`, `code_age`, `avatar`, `cover`, `gender`, `country`, `province`, `city`, `language`, `visit_count`, `like_count`, `token`, `token_expire_time`, `is_new_user`, `is_engineer`, `user_type`, `status`, `role`, `email`, `phone`, `qq`, `wechat`, `github`, `weibo`, `douyin`, `web_url`, `working_hours`, `last_login_time`, `last_login_ip`, `create_time`, `update_time`) VALUES
+(1, 'ocAWa4jVUL8Lp9eiqkRbMjYkjq28', 'e2d2eb129b794b0a45b39881aa8161e3', 'PeterSun', 9, '/static/images/avatar/avatar_695b5aec7ffd9.jpg', '/static/images/cover/cover_695b67a67559c.jpg', 0, '', '', '', 'zh_CN', 0, 0, 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3Njc1OTg2NzksImV4cCI6MTc2ODIwMzQ3OSwibmJmIjoxNzY3NTk4Njc5LCJ1c2VyX2lkIjoxLCJ0eXBlIjoidXNlciJ9.LmixLGkFIlcu5n4E2y64n-2nZp8ZJuN16xJ51WZAkcA', '2026-01-12 15:37:59', 0, 0, 'admin', 1, '访客', 'cto@cvun.net', '15993113751', '21312314', 'cto-peter', '', NULL, '47305446676', '', '[{\"day\": \"工作日\", \"time\": \"09:00 - 18:00\"}, {\"day\": \"周六\", \"time\": \"10:00 - 16:00\"}, {\"day\": \"周日\", \"time\": \"休息\"}]', '2026-01-05 15:37:59', '127.0.0.1', '2025-09-02 03:34:25', '2026-01-05 15:37:59');
 
 CREATE TABLE `visit_log` (
   `id` int(11) NOT NULL,
@@ -346,6 +349,13 @@ CREATE TABLE `visit_log` (
   `device_type` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'desktop' COMMENT '设备类型：desktop,mobile,tablet',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='访问日志表' ROW_FORMAT=DYNAMIC;
+
+INSERT INTO `visit_log` (`id`, `ip`, `page`, `referer`, `user_agent`, `device_type`, `create_time`) VALUES
+(275, '39.163.100.107', '/pages/index/index', '', 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1 wechatdevtools/1.06.2504030 MicroMessenger/8.0.5 Language/zh_CN webview/ sessionid/13', 'mobile', '2026-01-05 15:27:39'),
+(276, '39.163.100.107', '/pages/index/index', '', 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1 wechatdevtools/1.06.2504030 MicroMessenger/8.0.5 Language/zh_CN webview/ sessionid/14', 'mobile', '2026-01-05 15:32:57'),
+(277, '39.163.100.107', '/pages/index/index', '', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.67(0x1800432b) NetType/WIFI Language/zh_CN', 'mobile', '2026-01-05 15:46:52'),
+(278, '39.163.100.107', '/pages/index/index', '', 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1 wechatdevtools/1.06.2504030 MicroMessenger/8.0.5 Language/zh_CN webview/ sessionid/27', 'mobile', '2026-01-05 15:52:16'),
+(279, '101.34.86.201', '/pages/index/index', '', 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36 MicroMessenger/7.0.20.1781(0x6700143B) NetType/WIFI MiniProgramEnv/Windows WindowsWechat/WMPF XWEB/1000/Tencent Security Team', 'desktop', '2026-01-05 15:56:42');
 
 
 ALTER TABLE `admin_log`
@@ -502,7 +512,7 @@ ALTER TABLE `users`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '用户ID', AUTO_INCREMENT=3;
 
 ALTER TABLE `visit_log`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=275;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=280;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

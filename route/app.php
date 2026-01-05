@@ -29,6 +29,7 @@ use think\facade\Route;
     // 用户相关接口
     Route::group('user', function () {
         Route::get('info', 'User/info'); // 获取用户信息
+        Route::get('splash-data', 'User/getSplashData'); // 获取启动页数据
         Route::post('update', 'User/update'); // 更新用户信息
         Route::get('technologies', 'User/technologies'); // 获取技术栈列表
         Route::get('map-data', 'User/mapData'); // 获取地图数据
@@ -36,6 +37,7 @@ use think\facade\Route;
         Route::get('get-info', 'User/getUserInfo'); // 获取微信用户信息
         Route::post('update-stats', 'User/updateUserStats'); // 更新用户统计信息
         Route::post('upload-avatar', 'User/uploadAvatar'); // 上传用户头像
+        Route::post('upload-cover', 'User/uploadCover'); // 上传用户封面
     });
     
     // 项目相关接口需鉴权

@@ -93,7 +93,7 @@ class User extends BaseController
     public function create(Request $request): Response
     {
         try {
-            $data = $request->only(['nickname', 'role', 'status', 'avatar', 'email', 'phone', 'qq', 'wechat', 'github', 'web_url']);
+            $data = $request->only(['nickname', 'role', 'status', 'avatar', 'cover', 'welcome_text', 'email', 'phone', 'qq', 'wechat', 'github', 'weibo', 'douyin', 'web_url']);
             if (empty($data['nickname'])) {
                 return json(['code' => 400, 'message' => '昵称不能为空']);
             }
@@ -150,7 +150,7 @@ class User extends BaseController
     {
         try {
             $id = $request->param('id');
-            $data = $request->only(['role', 'status', 'avatar', 'nickname', 'code_age' ,'email', 'phone', 'qq', 'wechat', 'github', 'web_url', 'working_hours']);
+            $data = $request->only(['role', 'status', 'avatar', 'cover', 'welcome_text', 'nickname', 'code_age' ,'email', 'phone', 'qq', 'wechat', 'github', 'weibo', 'douyin', 'web_url', 'working_hours']);
             if (isset($data['status'])) {
                 if ($data['status'] === 'active') {
                     $data['status'] = 1;
@@ -165,6 +165,36 @@ class User extends BaseController
             } else {
                 return json(['code' => 500, 'message' => '更新失败']);
             }
+        } catch (\Exception $e) {
+            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 获取启动页数据（头像 + 欢迎语）
+     */
+    public function getSplashData(): Response
+    {
+        try {
+            // 获取 ID 为 1 的用户头像
+            $user = Db::name('users')->where('id', 1)->field('avatar')->find();
+            $avatar = $user['avatar'] ?? '/static/images/peter.jpg';
+            
+            // 获取系统设置中的 subdescription
+            $setting = Db::name('system_settings')
+                ->where('setting_key', 'subdescription')
+                ->field('setting_value')
+                ->find();
+            $welcomeText = $setting['setting_value'] ?? '乔布斯于科技世界种下创新种子，罗永浩在行业浪潮里坚守情怀高地，都让我着迷。我仿佛看到老罗和乔布斯在科技和人文的十字路口探讨人生，所以我带着这份情怀，期待在这里与你相遇。';
+            
+            return json([
+                'code' => 200,
+                'message' => '获取成功',
+                'data' => [
+                    'avatar' => $avatar,
+                    'welcome_text' => $welcomeText
+                ]
+            ]);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
         }
@@ -247,6 +277,50 @@ class User extends BaseController
             $ext = $file->getOriginalExtension();
             $filename = uniqid('avatar_') . '.' . $ext;
             $info = $file->move(public_path() . $savePath, $filename);
+            if ($info) {
+                $url = $savePath . $filename;
+                return json(['code' => 200, 'message' => '上传成功', 'data' => ['url' => $url]]);
+            } else {
+                return json(['code' => 500, 'message' => $file->getError()]);
+            }
+        } catch (\Exception $e) {
+            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 上传用户封面
+     */
+    public function uploadCover(Request $request): Response
+    {
+        try {
+            $file = $request->file('cover');
+            if (!$file) {
+                return json(['code' => 400, 'message' => '未上传文件']);
+            }
+            
+            // 验证文件类型
+            $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+            $ext = strtolower($file->getOriginalExtension());
+            if (!in_array($ext, $allowedTypes)) {
+                return json(['code' => 400, 'message' => '不支持的文件类型，仅支持：' . implode(', ', $allowedTypes)]);
+            }
+            
+            // 验证文件大小（最大5MB）
+            if ($file->getSize() > 5 * 1024 * 1024) {
+                return json(['code' => 400, 'message' => '文件大小不能超过5MB']);
+            }
+            
+            $savePath = '/static/images/cover/';
+            $filename = uniqid('cover_') . '.' . $ext;
+            
+            // 确保目录存在
+            $fullPath = public_path() . $savePath;
+            if (!is_dir($fullPath)) {
+                mkdir($fullPath, 0755, true);
+            }
+            
+            $info = $file->move($fullPath, $filename);
             if ($info) {
                 $url = $savePath . $filename;
                 return json(['code' => 200, 'message' => '上传成功', 'data' => ['url' => $url]]);
