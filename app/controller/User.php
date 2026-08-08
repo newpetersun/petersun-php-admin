@@ -179,6 +179,7 @@ class User extends BaseController
             // 获取 ID 为 1 的用户头像
             $user = Db::name('users')->where('id', 1)->field('avatar')->find();
             $avatar = $user['avatar'] ?? '/static/images/peter.jpg';
+			$nickname = $user['nickname'] ?? 'Sam';
             
             // 获取系统设置中的 subdescription
             $setting = Db::name('system_settings')
@@ -191,6 +192,7 @@ class User extends BaseController
                 'code' => 200,
                 'message' => '获取成功',
                 'data' => [
+					'nickname' => $nickname,
                     'avatar' => $avatar,
                     'welcome_text' => $welcomeText
                 ]

@@ -16,7 +16,7 @@ class Contact extends BaseController
     public function info(): Response
     {
         try {
-            $contact = Db::name('contact')->where('id', 1)->find();
+            $contact = Db::name('users')->where('user_type', 'webmaster')->find();
             
             if (!$contact) {
                 return json(['code' => 404, 'message' => '联系信息不存在']);
@@ -129,21 +129,30 @@ class Contact extends BaseController
     public function message(Request $request): Response
     {
         try {
-            $data = $request->only(['name', 'email', 'subject', 'message']);
+            // 从 JWT token 中获取用户ID
+            $userId = $request->userId ?? null;
+            
+            if (!$userId) {
+                return json(['code' => 401, 'message' => '请先登录']);
+            }
+            
+            // 获取当前用户信息
+            $user = Db::name('users')->where('id', $userId)->find();
+            
+            if (!$user) {
+                return json(['code' => 404, 'message' => '用户不存在']);
+            }
+            
+            $data = $request->only(['subject', 'message']);
             
             // 验证必填字段
-            if (empty($data['name']) || empty($data['email']) || empty($data['message'])) {
-                return json(['code' => 400, 'message' => '姓名、邮箱和留言内容不能为空']);
+            if (empty($data['message'])) {
+                return json(['code' => 400, 'message' => '留言内容不能为空']);
             }
             
-            // 验证邮箱格式
-            if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-                return json(['code' => 400, 'message' => '邮箱格式不正确']);
-            }
-            
-            // 检查是否重复提交（5分钟内相同邮箱和内容）
+            // 检查是否重复提交（5分钟内相同用户和内容）
             $recentMessage = Db::name('contact_message')
-                ->where('email', $data['email'])
+                ->where('email', $user['email'])
                 ->where('message', $data['message'])
                 ->where('create_time', '>', date('Y-m-d H:i:s', time() - 300))
                 ->find();
@@ -153,8 +162,8 @@ class Contact extends BaseController
             }
             
             $messageData = [
-                'name' => $data['name'],
-                'email' => $data['email'],
+                'name' => $user['nickname'],  // 使用用户昵称作为姓名
+                'email' => $user['email'],     // 使用用户邮箱
                 'subject' => $data['subject'] ?? '',
                 'message' => $data['message'],
                 'ip' => $request->ip(),

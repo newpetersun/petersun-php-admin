@@ -56,7 +56,7 @@ class AdminAuth
         }
         
         // 检查用户类型是否为管理员
-        if ($user['user_type'] !== 'admin') {
+        if ($user['user_type'] !== 'webmaster') {
             return json([
                 'code' => 403,
                 'message' => '无管理员权限',

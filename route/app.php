@@ -73,7 +73,7 @@ use think\facade\Route;
         Route::get('info', 'Contact/info'); // 获取联系信息
         Route::post('update', 'Contact/update'); // 更新联系信息
         Route::get('messages', 'Contact/messages'); // 获取留言列表
-        Route::post('message', 'Contact/message'); // 提交留言
+        Route::post('message', 'Contact/message')->middleware(\app\middleware\JwtAuth::class); // 提交留言（需要登录）
         Route::post('read/:id', 'Contact/markAsRead'); // 标记留言为已读
         Route::delete('message/:id', 'Contact/deleteMessage'); // 删除留言
         Route::get('stats', 'Contact/stats'); // 获取留言统计
