@@ -17,6 +17,21 @@ CREATE TABLE `admin_log` (
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='管理员日志表' ROW_FORMAT=DYNAMIC;
 
+CREATE TABLE `contact` (
+  `id` int(11) NOT NULL,
+  `email` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '邮箱',
+  `wechat` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '微信号',
+  `qq` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'QQ号',
+  `address` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '地址',
+  `github` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'GitHub地址',
+  `working_hours` json DEFAULT NULL COMMENT '工作时间',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='联系信息表' ROW_FORMAT=DYNAMIC;
+
+INSERT INTO `contact` (`id`, `email`, `wechat`, `qq`, `address`, `github`, `working_hours`, `create_time`, `update_time`) VALUES
+(1, 'cto@cvun.net', 'cto-peters', '213123145', '河南省郑州市', 'https://github.com/petersun', '[{\"day\": \"工作日\", \"time\": \"09:00 - 18:00\"}, {\"day\": \"周六\", \"time\": \"10:00 - 16:00\"}, {\"day\": \"周日\", \"time\": \"休息\"}]', '2025-08-17 17:48:12', '2025-08-25 03:48:05');
+
 CREATE TABLE `contact_message` (
   `id` int(11) NOT NULL,
   `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '姓名',
@@ -294,15 +309,19 @@ CREATE TABLE `users` (
   `avatar` varchar(500) DEFAULT NULL COMMENT '头像URL',
   `cover` varchar(500) DEFAULT NULL COMMENT '封面图URL',
   `gender` tinyint(1) DEFAULT '0' COMMENT '性别：0未知，1男，2女',
-  `address` varchar(200) DEFAULT NULL COMMENT '地址',
+  `country` varchar(50) DEFAULT '' COMMENT '国家',
+  `province` varchar(50) DEFAULT '' COMMENT '省份',
+  `city` varchar(50) DEFAULT '' COMMENT '城市',
   `language` varchar(20) DEFAULT 'zh_CN' COMMENT '语言',
   `visit_count` int(11) DEFAULT '0' COMMENT '访问次数',
   `like_count` int(11) DEFAULT '0' COMMENT '点赞次数',
   `token` varchar(255) DEFAULT NULL COMMENT 'JWT token',
   `token_expire_time` datetime DEFAULT NULL COMMENT 'token过期时间',
+  `is_new_user` tinyint(1) DEFAULT '0' COMMENT '是否新用户',
   `is_engineer` tinyint(1) DEFAULT '0' COMMENT '是否工程师',
-  `user_type` enum('visitor','customer','webmaster') DEFAULT 'visitor' COMMENT '用户类型：visitor访客,customer客户,webmaster站长',
+  `user_type` varchar(20) DEFAULT 'wechat' COMMENT '用户类型：wechat',
   `status` tinyint(1) DEFAULT '1' COMMENT '状态：1启用，0禁用',
+  `role` varchar(20) DEFAULT '访客' COMMENT '角色',
   `email` varchar(255) DEFAULT NULL COMMENT '邮箱',
   `phone` varchar(20) DEFAULT NULL COMMENT '手机号',
   `qq` varchar(20) DEFAULT NULL COMMENT 'QQ号',
@@ -318,8 +337,8 @@ CREATE TABLE `users` (
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='统一用户表' ROW_FORMAT=DYNAMIC;
 
-INSERT INTO `users` (`id`, `openid`, `user_key`, `nickname`, `code_age`, `avatar`, `cover`, `gender`, `country`, `province`, `city`, `address`, `language`, `visit_count`, `like_count`, `token`, `token_expire_time`, `is_engineer`, `user_type`, `status`, `email`, `phone`, `qq`, `wechat`, `github`, `weibo`, `douyin`, `web_url`, `working_hours`, `last_login_time`, `last_login_ip`, `create_time`, `update_time`) VALUES
-(1, 'ocAWa4jVUL8Lp9eiqkRbMjYkjq28', 'e2d2eb129b794b0a45b39881aa8161e3', 'PeterSun', 9, '/static/images/avatar/avatar_695b5aec7ffd9.jpg', '/static/images/cover/cover_695b67a67559c.jpg', 0, '', '', '', '河南省郑州市', 'zh_CN', 0, 0, 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3Njc1OTg2NzksImV4cCI6MTc2ODIwMzQ3OSwibmJmIjoxNzY3NTk4Njc5LCJ1c2VyX2lkIjoxLCJ0eXBlIjoidXNlciJ9.LmixLGkFIlcu5n4E2y64n-2nZp8ZJuN16xJ51WZAkcA', '2026-01-12 15:37:59', 0, 'webmaster', 1, 'cto@cvun.net', '15993113751', '21312314', 'cto-peter', '', NULL, '47305446676', '', '[{\"day\": \"工作日\", \"time\": \"09:00 - 18:00\"}, {\"day\": \"周六\", \"time\": \"10:00 - 16:00\"}, {\"day\": \"周日\", \"time\": \"休息\"}]', '2026-01-05 15:37:59', '127.0.0.1', '2025-09-02 03:34:25', '2026-01-05 15:37:59');
+INSERT INTO `users` (`id`, `openid`, `user_key`, `nickname`, `code_age`, `avatar`, `cover`, `gender`, `country`, `province`, `city`, `language`, `visit_count`, `like_count`, `token`, `token_expire_time`, `is_new_user`, `is_engineer`, `user_type`, `status`, `role`, `email`, `phone`, `qq`, `wechat`, `github`, `weibo`, `douyin`, `web_url`, `working_hours`, `last_login_time`, `last_login_ip`, `create_time`, `update_time`) VALUES
+(1, 'ocAWa4jVUL8Lp9eiqkRbMjYkjq28', 'e2d2eb129b794b0a45b39881aa8161e3', 'PeterSun', 9, '/static/images/avatar/avatar_695b5aec7ffd9.jpg', '/static/images/cover/cover_695b67a67559c.jpg', 0, '', '', '', 'zh_CN', 0, 0, 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3Njc1OTg2NzksImV4cCI6MTc2ODIwMzQ3OSwibmJmIjoxNzY3NTk4Njc5LCJ1c2VyX2lkIjoxLCJ0eXBlIjoidXNlciJ9.LmixLGkFIlcu5n4E2y64n-2nZp8ZJuN16xJ51WZAkcA', '2026-01-12 15:37:59', 0, 0, 'admin', 1, '访客', 'cto@cvun.net', '15993113751', '21312314', 'cto-peter', '', NULL, '47305446676', '', '[{\"day\": \"工作日\", \"time\": \"09:00 - 18:00\"}, {\"day\": \"周六\", \"time\": \"10:00 - 16:00\"}, {\"day\": \"周日\", \"time\": \"休息\"}]', '2026-01-05 15:37:59', '127.0.0.1', '2025-09-02 03:34:25', '2026-01-05 15:37:59');
 
 CREATE TABLE `visit_log` (
   `id` int(11) NOT NULL,
@@ -344,6 +363,9 @@ ALTER TABLE `admin_log`
   ADD KEY `idx_username` (`username`) USING BTREE,
   ADD KEY `idx_action` (`action`) USING BTREE,
   ADD KEY `idx_create_time` (`create_time`) USING BTREE;
+
+ALTER TABLE `contact`
+  ADD PRIMARY KEY (`id`) USING BTREE;
 
 ALTER TABLE `contact_message`
   ADD PRIMARY KEY (`id`) USING BTREE,
@@ -440,6 +462,9 @@ ALTER TABLE `visit_log`
 
 ALTER TABLE `admin_log`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `contact`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 ALTER TABLE `contact_message`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;

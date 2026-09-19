@@ -233,26 +233,26 @@ class User extends BaseController
     {
         try {
             $mapData = [
-                ['name' => '北京市', 'value' => 100, 'level' => '核心服务区'],
-                ['name' => '上海市', 'value' => 95, 'level' => '核心服务区'],
-                ['name' => '广东省', 'value' => 90, 'level' => '核心服务区'],
-                ['name' => '江苏省', 'value' => 85, 'level' => '重点服务区'],
-                ['name' => '浙江省', 'value' => 80, 'level' => '重点服务区'],
-                ['name' => '山东省', 'value' => 75, 'level' => '重点服务区'],
-                ['name' => '四川省', 'value' => 70, 'level' => '重点服务区'],
-                ['name' => '湖北省', 'value' => 65, 'level' => '一般服务区'],
-                ['name' => '河南省', 'value' => 60, 'level' => '一般服务区'],
-                ['name' => '湖南省', 'value' => 55, 'level' => '一般服务区'],
-                ['name' => '福建省', 'value' => 50, 'level' => '一般服务区'],
-                ['name' => '安徽省', 'value' => 45, 'level' => '一般服务区'],
-                ['name' => '河北省', 'value' => 40, 'level' => '一般服务区'],
-                ['name' => '陕西省', 'value' => 35, 'level' => '一般服务区'],
-                ['name' => '江西省', 'value' => 30, 'level' => '待开发区域'],
-                ['name' => '重庆市', 'value' => 25, 'level' => '待开发区域'],
-                ['name' => '天津市', 'value' => 20, 'level' => '待开发区域'],
-                ['name' => '云南省', 'value' => 15, 'level' => '待开发区域'],
+                ['name' => '北京', 'value' => 100, 'level' => '核心服务区'],
+                ['name' => '上海', 'value' => 95, 'level' => '一般服务区'],
+                ['name' => '广东', 'value' => 90, 'level' => '一般服务区'],
+                ['name' => '江苏', 'value' => 85, 'level' => '核心服务区'],
+                ['name' => '浙江', 'value' => 80, 'level' => '一般服务区'],
+                ['name' => '山东', 'value' => 75, 'level' => '核心服务区'],
+                ['name' => '四川', 'value' => 70, 'level' => '一般服务区'],
+                ['name' => '湖北', 'value' => 65, 'level' => '一般服务区'],
+                ['name' => '河南', 'value' => 60, 'level' => '核心服务区'],
+                ['name' => '湖南', 'value' => 55, 'level' => '一般服务区'],
+                ['name' => '福建', 'value' => 50, 'level' => '一般服务区'],
+                ['name' => '安徽', 'value' => 45, 'level' => '一般服务区'],
+                ['name' => '河北', 'value' => 40, 'level' => '一般服务区'],
+                ['name' => '陕西', 'value' => 35, 'level' => '一般服务区'],
+                ['name' => '江西', 'value' => 30, 'level' => '待开发区域'],
+                ['name' => '重庆', 'value' => 25, 'level' => '待开发区域'],
+                ['name' => '天津', 'value' => 20, 'level' => '待开发区域'],
+                ['name' => '云南', 'value' => 15, 'level' => '待开发区域'],
                 ['name' => '广西壮族自治区', 'value' => 10, 'level' => '待开发区域'],
-                ['name' => '山西省', 'value' => 5, 'level' => '待开发区域']
+                ['name' => '山西', 'value' => 5, 'level' => '待开发区域']
             ];
             
             return json([

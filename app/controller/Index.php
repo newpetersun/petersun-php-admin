@@ -7,21 +7,18 @@ use app\model\User as UserModel;
 use think\Request;
 use think\facade\Db;
 use think\facade\Cache;
+use think\facade\View;
 
 class Index extends BaseController
 {
     public function index()
     {
-        return json([
-            'code' => 200,
-            'message' => 'success',
-            'data' => 'api管理系统'
-        ]);
+        return View::fetch();
     }
 
     public function china()
     {
-		$url = 'https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json';
+		$url = 'https://www.sundongliang.cn/static/json/china.json';
 		 
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);

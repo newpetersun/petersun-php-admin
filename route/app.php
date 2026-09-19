@@ -73,7 +73,7 @@ use think\facade\Route;
         Route::get('info', 'Contact/info'); // 获取联系信息
         Route::post('update', 'Contact/update'); // 更新联系信息
         Route::get('messages', 'Contact/messages'); // 获取留言列表
-        Route::post('message', 'Contact/message')->middleware(\app\middleware\JwtAuth::class); // 提交留言（需要登录）
+        Route::post('message', 'Contact/message'); // 提交留言
         Route::post('read/:id', 'Contact/markAsRead'); // 标记留言为已读
         Route::delete('message/:id', 'Contact/deleteMessage'); // 删除留言
         Route::get('stats', 'Contact/stats'); // 获取留言统计
@@ -170,12 +170,20 @@ use think\facade\Route;
         Route::post('attachment/:requirement_id', 'Progress/uploadAttachment'); // 上传附件
         Route::delete('attachment/:id', 'Progress/deleteAttachment'); // 删除附件
     })->middleware('JwtAuth');
+
+    // 虚拟支付（个人主体，道具直购）
+    Route::group('pay', function () {
+        Route::get('goods', 'Pay/goods');                  // 道具列表
+        Route::get('status', 'Pay/status');                // 订单状态（前端轮询）
+        Route::post('order', 'Pay/order');                 // 下单，返回 payData
+    })->middleware('JwtAuth');
+
+    Route::group('pay', function () {
+        Route::post('query', 'Pay/query');                 // 手动兜底查单
+    })->middleware(['JwtAuth', 'AdminAuth']);
+
+    // 发货推送：微信平台回调，不能挂登录态中间件
+    Route::post('pay/notify', 'Pay/notify');
+
 // 默认路由
-Route::get('/', function () {
-    return json([
-        'code' => 200,
-        'message' => 'PeterSun作品集API服务',
-        'version' => '1.0.0',
-        'timestamp' => date('Y-m-d H:i:s')
-    ]);
-});
+Route::get('/', 'Index/index');

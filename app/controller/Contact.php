@@ -129,30 +129,21 @@ class Contact extends BaseController
     public function message(Request $request): Response
     {
         try {
-            // 从 JWT token 中获取用户ID
-            $userId = $request->userId ?? null;
-            
-            if (!$userId) {
-                return json(['code' => 401, 'message' => '请先登录']);
-            }
-            
-            // 获取当前用户信息
-            $user = Db::name('users')->where('id', $userId)->find();
-            
-            if (!$user) {
-                return json(['code' => 404, 'message' => '用户不存在']);
-            }
-            
-            $data = $request->only(['subject', 'message']);
+            $data = $request->only(['name', 'email', 'subject', 'message']);
             
             // 验证必填字段
-            if (empty($data['message'])) {
-                return json(['code' => 400, 'message' => '留言内容不能为空']);
+            if (empty($data['name']) || empty($data['email']) || empty($data['message'])) {
+                return json(['code' => 400, 'message' => '姓名、邮箱和留言内容不能为空']);
             }
             
-            // 检查是否重复提交（5分钟内相同用户和内容）
+            // 验证邮箱格式
+            if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+                return json(['code' => 400, 'message' => '邮箱格式不正确']);
+            }
+            
+            // 检查是否重复提交（5分钟内相同邮箱和内容）
             $recentMessage = Db::name('contact_message')
-                ->where('email', $user['email'])
+                ->where('email', $data['email'])
                 ->where('message', $data['message'])
                 ->where('create_time', '>', date('Y-m-d H:i:s', time() - 300))
                 ->find();
@@ -162,8 +153,8 @@ class Contact extends BaseController
             }
             
             $messageData = [
-                'name' => $user['nickname'],  // 使用用户昵称作为姓名
-                'email' => $user['email'],     // 使用用户邮箱
+                'name' => $data['name'],
+                'email' => $data['email'],
                 'subject' => $data['subject'] ?? '',
                 'message' => $data['message'],
                 'ip' => $request->ip(),

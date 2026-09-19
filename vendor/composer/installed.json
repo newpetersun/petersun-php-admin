@@ -1446,30 +1446,24 @@
         },
         {
             "name": "topthink/think-view",
-            "version": "v2.0.0",
-            "version_normalized": "2.0.0.0",
+            "version": "v2.0.5",
+            "version_normalized": "2.0.5.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/top-think/think-view.git",
-                "reference": "d2a076011c96d2edd8016703a827fb54b2683c62"
+                "reference": "b42009b98199b5a3833d3d6fd18c8a55aa511fad"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/top-think/think-view/zipball/d2a076011c96d2edd8016703a827fb54b2683c62",
-                "reference": "d2a076011c96d2edd8016703a827fb54b2683c62",
-                "shasum": "",
-                "mirrors": [
-                    {
-                        "url": "https://mirrors.aliyun.com/composer/dists/%package%/%reference%.%type%",
-                        "preferred": true
-                    }
-                ]
+                "url": "https://api.github.com/repos/top-think/think-view/zipball/b42009b98199b5a3833d3d6fd18c8a55aa511fad",
+                "reference": "b42009b98199b5a3833d3d6fd18c8a55aa511fad",
+                "shasum": ""
             },
             "require": {
                 "php": ">=8.0.0",
                 "topthink/think-template": "^3.0"
             },
-            "time": "2023-02-25T12:18:09+00:00",
+            "time": "2025-03-19T07:04:19+00:00",
             "type": "library",
             "installation-source": "dist",
             "autoload": {
@@ -1490,7 +1484,7 @@
             "description": "thinkphp template driver",
             "support": {
                 "issues": "https://github.com/top-think/think-view/issues",
-                "source": "https://github.com/top-think/think-view/tree/v2.0.0"
+                "source": "https://github.com/top-think/think-view/tree/v2.0.5"
             },
             "install-path": "../topthink/think-view"
         }
