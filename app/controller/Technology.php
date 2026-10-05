@@ -29,7 +29,7 @@ class Technology extends BaseController
                 $where[] = ['status', '=', $status];
             }
             
-            $technologies = Db::name('technology')
+            $technologies = Db::name('technologies')
                 ->where($where)
                 ->order('id', 'asc')
                 ->paginate([
@@ -58,7 +58,7 @@ class Technology extends BaseController
     public function detail(int $id): Response
     {
         try {
-            $technology = Db::name('technology')->where('id', $id)->find();
+            $technology = Db::name('technologies')->where('id', $id)->find();
             
             if (!$technology) {
                 return json(['code' => 404, 'message' => '技术不存在']);
@@ -80,7 +80,7 @@ class Technology extends BaseController
     public function create(Request $request): Response
     {
         try {
-            $data = $request->only(['name', 'img', 'sort_order', 'status']);
+            $data = $request->only(['name', 'category', 'img', 'sort_order', 'status']);
             
             // 验证必填字段
             if (empty($data['name'])) {
@@ -88,7 +88,7 @@ class Technology extends BaseController
             }
             
             // 检查技术名称是否已存在
-            $exists = Db::name('technology')->where('name', $data['name'])->find();
+            $exists = Db::name('technologies')->where('name', $data['name'])->find();
             if ($exists) {
                 return json(['code' => 400, 'message' => '技术名称已存在']);
             }
@@ -99,11 +99,11 @@ class Technology extends BaseController
             $data['create_time'] = date('Y-m-d H:i:s');
             $data['update_time'] = date('Y-m-d H:i:s');
             
-            $id = Db::name('technology')->insertGetId($data);
+            $id = Db::name('technologies')->insertGetId(array_merge(['id' => uuid()], $data));
             
             if ($id) {
                 // 返回创建的技术信息
-                $technology = Db::name('technology')->where('id', $id)->find();
+                $technology = Db::name('technologies')->where('id', $id)->find();
                 return json([
                     'code' => 200,
                     'message' => '创建成功',
@@ -126,7 +126,7 @@ class Technology extends BaseController
             $data = $request->only(['name', 'category', 'img', 'sort_order', 'status']);
             
             // 检查技术是否存在
-            $technology = Db::name('technology')->where('id', $id)->find();
+            $technology = Db::name('technologies')->where('id', $id)->find();
             if (!$technology) {
                 return json(['code' => 404, 'message' => '技术不存在']);
             }
@@ -137,7 +137,7 @@ class Technology extends BaseController
             }
             
             // 检查技术名称是否已存在（排除当前记录）
-            $exists = Db::name('technology')
+            $exists = Db::name('technologies')
                 ->where('name', $data['name'])
                 ->where('id', '<>', $id)
                 ->find();
@@ -148,11 +148,11 @@ class Technology extends BaseController
             // 设置更新时间
             $data['update_time'] = date('Y-m-d H:i:s');
             
-            $result = Db::name('technology')->where('id', $id)->update($data);
+            $result = Db::name('technologies')->where('id', $id)->update($data);
             
             if ($result !== false) {
                 // 返回更新后的技术信息
-                $updatedTechnology = Db::name('technology')->where('id', $id)->find();
+                $updatedTechnology = Db::name('technologies')->where('id', $id)->find();
                 return json([
                     'code' => 200,
                     'message' => '更新成功',
@@ -173,12 +173,12 @@ class Technology extends BaseController
     {
         try {
             // 检查技术是否存在
-            $technology = Db::name('technology')->where('id', $id)->find();
+            $technology = Db::name('technologies')->where('id', $id)->find();
             if (!$technology) {
                 return json(['code' => 404, 'message' => '技术不存在']);
             }
             
-            $result = Db::name('technology')->where('id', $id)->delete();
+            $result = Db::name('technologies')->where('id', $id)->delete();
             
             if ($result) {
                 return json(['code' => 200, 'message' => '删除成功']);
@@ -199,7 +199,7 @@ class Technology extends BaseController
             $status = $request->param('status');
             
             // 检查技术是否存在
-            $technology = Db::name('technology')->where('id', $id)->find();
+            $technology = Db::name('technologies')->where('id', $id)->find();
             if (!$technology) {
                 return json(['code' => 404, 'message' => '技术不存在']);
             }
@@ -209,7 +209,7 @@ class Technology extends BaseController
                 return json(['code' => 400, 'message' => '状态值无效']);
             }
             
-            $result = Db::name('technology')
+            $result = Db::name('technologies')
                 ->where('id', $id)
                 ->update([
                     'status' => $status,
@@ -232,7 +232,7 @@ class Technology extends BaseController
     public function categories(): Response
     {
         try {
-            $categories = Db::name('technology')
+            $categories = Db::name('technologies')
                 ->field('category')
                 ->where('category', '<>', '')
                 ->group('category')
@@ -260,7 +260,7 @@ class Technology extends BaseController
                 return json(['code' => 400, 'message' => '请选择要删除的技术']);
             }
             
-            $result = Db::name('technology')->whereIn('id', $ids)->delete();
+            $result = Db::name('technologies')->whereIn('id', $ids)->delete();
             
             if ($result) {
                 return json(['code' => 200, 'message' => '批量删除成功']);
@@ -289,7 +289,7 @@ class Technology extends BaseController
                 return json(['code' => 400, 'message' => '状态值无效']);
             }
             
-            $result = Db::name('technology')
+            $result = Db::name('technologies')
                 ->whereIn('id', $ids)
                 ->update([
                     'status' => $status,

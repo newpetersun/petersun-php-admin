@@ -30,7 +30,7 @@ class Project extends BaseController
             }
             $where[] = ['status', '=', 1]; // 只显示已发布的项目
             
-            $projects = Db::name('project')
+            $projects = Db::name('projects')
                 ->where($where)
                 ->order('sort_order', 'asc')
                 ->order('create_time', 'desc')
@@ -44,7 +44,7 @@ class Project extends BaseController
             // 处理项目数据
             foreach ($list as &$project) {
                 // 获取项目标签
-                $tags = Db::name('project_tag')
+                $tags = Db::name('project_tags')
                     ->alias('pt')
                     ->join('tag t', 'pt.tag_id = t.id')
                     ->where('pt.project_id', $project['id'])
@@ -52,7 +52,7 @@ class Project extends BaseController
                 $project['tags'] = $tags;
                 
                 // 获取项目技术栈
-                $technologies = Db::name('project_technology')
+                $technologies = Db::name('project_technologies')
                     ->alias('pt')
                     ->join('technology t', 'pt.technology_id = t.id')
                     ->where('pt.project_id', $project['id'])
@@ -113,21 +113,21 @@ class Project extends BaseController
     public function detail($id): Response
     {
         try {
-            $project = Db::name('project')->where('id', $id)->find();
+            $project = Db::name('projects')->where('id', $id)->find();
             
             if (!$project) {
                 return json(['code' => 404, 'message' => '项目不存在']);
             }
             
             // 获取项目标签
-            $tags = Db::name('project_tag')
+            $tags = Db::name('project_tags')
                 ->alias('pt')
                 ->join('tag t', 'pt.tag_id = t.id')
                 ->where('pt.project_id', $id)
                 ->column('t.name');
             
             // 获取项目技术栈
-            $technologies = Db::name('project_technology')
+            $technologies = Db::name('project_technologies')
                 ->alias('pt')
                 ->join('technology t', 'pt.technology_id = t.id')
                 ->where('pt.project_id', $id)
@@ -146,7 +146,7 @@ class Project extends BaseController
                 ->column('image_url');
             
             // 获取项目需求列表
-            $requirements = Db::name('project_requirements')
+            $requirements = Db::name('requirements')
                 ->where('project_id', $id)
                 ->order('create_time', 'desc')
                 ->select()
@@ -218,7 +218,7 @@ class Project extends BaseController
     public function categories(): Response
     {
         try {
-            $categories = Db::name('project_category')
+            $categories = Db::name('project_categories')
                 ->where('status', 1)
                 ->order('sort_order', 'asc')
                 ->select()
@@ -248,7 +248,7 @@ class Project extends BaseController
     public function featured(): Response
     {
         try {
-            $projects = Db::name('project')
+            $projects = Db::name('projects')
                 ->where('status', 1)
                 ->where('is_featured', 1)
                 ->order('sort_order', 'asc')
@@ -259,7 +259,7 @@ class Project extends BaseController
             // 处理项目数据
             foreach ($projects as &$project) {
                 // 获取项目标签
-                $tags = Db::name('project_tag')
+                $tags = Db::name('project_tags')
                     ->alias('pt')
                     ->join('tag t', 'pt.tag_id = t.id')
                     ->where('pt.project_id', $project['id'])
@@ -267,7 +267,7 @@ class Project extends BaseController
                 $project['tags'] = $tags;
                 
                 // 获取项目技术栈
-                $technologies = Db::name('project_technology')
+                $technologies = Db::name('project_technologies')
                     ->alias('pt')
                     ->join('technology t', 'pt.technology_id = t.id')
                     ->where('pt.project_id', $project['id'])
@@ -324,11 +324,12 @@ class Project extends BaseController
             try {
                 // 创建项目
                 $projectData = [
+                    'id' => uuid(),
                     'title' => $data['title'],
                     'description' => $data['description'],
                     'full_description' => $data['full_description'] ?? '',
                     'image' => $data['image'] ?? '',
-                    'category_id' => $data['category_id'] ?? 1,
+                    'category_id' => $data['category_id'] ?? null,
                     'client_id' => $data['client_id'] ?? null,
                     'features' => is_array($data['features']) ? implode(',', $data['features']) : '',
                     'sort_order' => $data['sort_order'] ?? 0,
@@ -337,13 +338,14 @@ class Project extends BaseController
                     'create_time' => date('Y-m-d H:i:s')
                 ];
                 
-                $projectId = Db::name('project')->insertGetId($projectData);
+                $projectId = Db::name('projects')->insertGetId($projectData);
                 
                 // 处理多图片
                 if (!empty($data['images']) && is_array($data['images'])) {
                     $sortOrder = 0;
                     foreach ($data['images'] as $imageUrl) {
                         Db::name('project_images')->insert([
+                            'id' => uuid(),
                             'project_id' => $projectId,
                             'image_url' => $imageUrl,
                             'sort_order' => $sortOrder++,
@@ -356,7 +358,7 @@ class Project extends BaseController
                 if (!empty($data['tags']) && is_array($data['tags'])) {
                     foreach ($data['tags'] as $tagName) {
                         $tagId = $this->getOrCreateTag($tagName);
-                        Db::name('project_tag')->insert([
+                        Db::name('project_tags')->insert([
                             'project_id' => $projectId,
                             'tag_id' => $tagId
                         ]);
@@ -367,7 +369,7 @@ class Project extends BaseController
                 if (!empty($data['technologies']) && is_array($data['technologies'])) {
                     foreach ($data['technologies'] as $techName) {
                         $techId = $this->getOrCreateTechnology($techName);
-                        Db::name('project_technology')->insert([
+                        Db::name('project_technologies')->insert([
                             'project_id' => $projectId,
                             'technology_id' => $techId
                         ]);
@@ -414,7 +416,7 @@ class Project extends BaseController
                     'description' => $data['description'],
                     'full_description' => $data['full_description'] ?? '',
                     'image' => $data['image'] ?? '',
-                    'category_id' => $data['category_id'] ?? 1,
+                    'category_id' => $data['category_id'] ?? null,
                     'client_id' => $data['client_id'] ?? null,
                     'features' => is_array($data['features']) ? implode(',', $data['features']) : '',
                     'sort_order' => $data['sort_order'] ?? 0,
@@ -422,7 +424,7 @@ class Project extends BaseController
                     'update_time' => date('Y-m-d H:i:s')
                 ];
                 
-                Db::name('project')->where('id', $id)->update($projectData);
+                Db::name('projects')->where('id', $id)->update($projectData);
                 
                 // 处理多图片 - 先删除原有图片
                 Db::name('project_images')->where('project_id', $id)->delete();
@@ -430,6 +432,7 @@ class Project extends BaseController
                     $sortOrder = 0;
                     foreach ($data['images'] as $imageUrl) {
                         Db::name('project_images')->insert([
+                            'id' => uuid(),
                             'project_id' => $id,
                             'image_url' => $imageUrl,
                             'sort_order' => $sortOrder++,
@@ -439,14 +442,14 @@ class Project extends BaseController
                 }
                 
                 // 删除旧的标签和技术栈关联
-                Db::name('project_tag')->where('project_id', $id)->delete();
-                Db::name('project_technology')->where('project_id', $id)->delete();
+                Db::name('project_tags')->where('project_id', $id)->delete();
+                Db::name('project_technologies')->where('project_id', $id)->delete();
                 
                 // 处理标签关联
                 if (!empty($data['tags']) && is_array($data['tags'])) {
                     foreach ($data['tags'] as $tagName) {
                         $tagId = $this->getOrCreateTag($tagName);
-                        Db::name('project_tag')->insert([
+                        Db::name('project_tags')->insert([
                             'project_id' => $id,
                             'tag_id' => $tagId
                         ]);
@@ -457,7 +460,7 @@ class Project extends BaseController
                 if (!empty($data['technologies']) && is_array($data['technologies'])) {
                     foreach ($data['technologies'] as $techName) {
                         $techId = $this->getOrCreateTechnology($techName);
-                        Db::name('project_technology')->insert([
+                        Db::name('project_technologies')->insert([
                             'project_id' => $id,
                             'technology_id' => $techId
                         ]);
@@ -484,12 +487,12 @@ class Project extends BaseController
             Db::startTrans();
             try {
                 // 删除项目关联数据
-                Db::name('project_tag')->where('project_id', $id)->delete();
-                Db::name('project_technology')->where('project_id', $id)->delete();
+                Db::name('project_tags')->where('project_id', $id)->delete();
+                Db::name('project_technologies')->where('project_id', $id)->delete();
                 Db::name('project_images')->where('project_id', $id)->delete();
                 
                 // 删除项目
-                Db::name('project')->where('id', $id)->delete();
+                Db::name('projects')->where('id', $id)->delete();
                 
                 Db::commit();
                 return json(['code' => 200, 'message' => '删除成功']);
@@ -510,7 +513,7 @@ class Project extends BaseController
         try {
             $status = $request->param('status', 1);
             
-            $result = Db::name('project')->where('id', $id)->update(['status' => $status]);
+            $result = Db::name('projects')->where('id', $id)->update(['status' => $status]);
             
             if ($result !== false) {
                 return json(['code' => 200, 'message' => '状态更新成功']);
@@ -536,12 +539,13 @@ class Project extends BaseController
      */
     private function getOrCreateTag($tagName)
     {
-        $tag = Db::name('tag')->where('name', $tagName)->find();
+        $tag = Db::name('tags')->where('name', $tagName)->find();
         if ($tag) {
             return $tag['id'];
         }
         
-        return Db::name('tag')->insertGetId([
+        return Db::name('tags')->insertGetId([
+            'id' => uuid(),
             'name' => $tagName,
             'create_time' => date('Y-m-d H:i:s')
         ]);
@@ -598,12 +602,13 @@ class Project extends BaseController
      */
     private function getOrCreateTechnology($techName)
     {
-        $tech = Db::name('technology')->where('name', $techName)->find();
+        $tech = Db::name('technologies')->where('name', $techName)->find();
         if ($tech) {
             return $tech['id'];
         }
         
-        return Db::name('technology')->insertGetId([
+        return Db::name('technologies')->insertGetId([
+            'id' => uuid(),
             'name' => $techName,
             'create_time' => date('Y-m-d H:i:s')
         ]);

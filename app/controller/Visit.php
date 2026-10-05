@@ -26,7 +26,7 @@ class Visit extends BaseController
             $deviceType = $this->detectDeviceType($userAgent);
             
             // 检查是否重复访问（同一IP同一页面5分钟内）
-            $recentVisit = Db::name('visit_log')
+            $recentVisit = Db::name('visit_logs')
                 ->where('ip', $ip)
                 ->where('page', $data['page'] ?? '/')
                 ->where('create_time', '>', date('Y-m-d H:i:s', time() - 300))
@@ -43,7 +43,7 @@ class Visit extends BaseController
                     'create_time' => date('Y-m-d H:i:s')
                 ];
                 
-                Db::name('visit_log')->insert($logData);
+                Db::name('visit_logs')->insert(array_merge(['id' => uuid()], $logData));
             }
             
             return json(['code' => 200, 'message' => '记录成功']);
@@ -74,16 +74,16 @@ class Visit extends BaseController
                     $startTime = date('Y-m-d 00:00:00');
             }
             
-            $totalVisits = Db::name('visit_log')
+            $totalVisits = Db::name('visit_logs')
                 ->where('create_time', '>=', $startTime)
                 ->count();
             
-            $uniqueVisitors = Db::name('visit_log')
+            $uniqueVisitors = Db::name('visit_logs')
                 ->where('create_time', '>=', $startTime)
                 ->group('ip')
                 ->count();
             
-            $popularPages = Db::name('visit_log')
+            $popularPages = Db::name('visit_logs')
                 ->field('page, count(*) as count')
                 ->where('create_time', '>=', $startTime)
                 ->group('page')
@@ -92,7 +92,7 @@ class Visit extends BaseController
                 ->select()
                 ->toArray();
             
-            $deviceStats = Db::name('visit_log')
+            $deviceStats = Db::name('visit_logs')
                 ->field('device_type, count(*) as count')
                 ->where('create_time', '>=', $startTime)
                 ->group('device_type')
@@ -128,12 +128,12 @@ class Visit extends BaseController
                 $startTime = $date . ' 00:00:00';
                 $endTime = $date . ' 23:59:59';
                 
-                $visits = Db::name('visit_log')
+                $visits = Db::name('visit_logs')
                     ->where('create_time', '>=', $startTime)
                     ->where('create_time', '<=', $endTime)
                     ->count();
                 
-                $visitors = Db::name('visit_log')
+                $visitors = Db::name('visit_logs')
                     ->where('create_time', '>=', $startTime)
                     ->where('create_time', '<=', $endTime)
                     ->group('ip')
@@ -163,24 +163,24 @@ class Visit extends BaseController
     {
         try {
             // 当前在线用户（5分钟内有访问）
-            $onlineUsers = Db::name('visit_log')
+            $onlineUsers = Db::name('visit_logs')
                 ->where('create_time', '>', date('Y-m-d H:i:s', time() - 300))
                 ->group('ip')
                 ->count();
             
             // 今日访问量
-            $todayVisits = Db::name('visit_log')
+            $todayVisits = Db::name('visit_logs')
                 ->where('create_time', '>=', date('Y-m-d 00:00:00'))
                 ->count();
             
             // 今日访客数
-            $todayVisitors = Db::name('visit_log')
+            $todayVisitors = Db::name('visit_logs')
                 ->where('create_time', '>=', date('Y-m-d 00:00:00'))
                 ->group('ip')
                 ->count();
             
             // 最近访问记录
-            $recentVisits = Db::name('visit_log')
+            $recentVisits = Db::name('visit_logs')
                 ->field('ip, page, create_time')
                 ->order('create_time', 'desc')
                 ->limit(10)

@@ -26,13 +26,13 @@ class Progress extends BaseController
             }
             
             // 验证项目是否存在
-            $project = Db::name('project')->where('id', $projectId)->find();
+            $project = Db::name('projects')->where('id', $projectId)->find();
             if (!$project) {
                 return json(['code' => 404, 'message' => '项目不存在']);
             }
             
             // 获取需求列表
-            $requirements = Db::name('project_requirements')
+            $requirements = Db::name('requirements')
                 ->where('project_id', $projectId)
                 ->order('create_time', 'desc')
                 ->select()
@@ -62,7 +62,7 @@ class Progress extends BaseController
             }
             
             // 验证项目是否存在
-            $project = Db::name('project')->where('id', $data['project_id'])->find();
+            $project = Db::name('projects')->where('id', $data['project_id'])->find();
             if (!$project) {
                 return json(['code' => 404, 'message' => '项目不存在']);
             }
@@ -75,13 +75,13 @@ class Progress extends BaseController
             
             // 准备插入数据
             $insertData = [
+                'id' => uuid(),
                 'project_id' => $data['project_id'],
                 'title' => trim($data['title']),
                 'description' => trim($data['description']),
                 'status' => $data['status'] ?? 'pending',
                 'priority' => $data['priority'] ?? 'medium',
                 'estimated_hours' => $data['estimated_hours'] ?? null,
-                'assignee' => $data['assignee'] ?? null,
                 'assignee_id' => $data['assignee_id'] ?? null,
                 'template_id' => $data['template_id'] ?? null,
                 'create_time' => date('Y-m-d H:i:s'),
@@ -89,7 +89,7 @@ class Progress extends BaseController
             ];
             
             // 插入数据
-            $requirementId = Db::name('project_requirements')->insertGetId($insertData);
+            $requirementId = Db::name('requirements')->insertGetId($insertData);
             
             if ($requirementId) {
                 return json([
@@ -119,7 +119,7 @@ class Progress extends BaseController
             }
             
             // 验证需求是否存在
-            $requirement = Db::name('project_requirements')->where('id', $id)->find();
+            $requirement = Db::name('requirements')->where('id', $id)->find();
             if (!$requirement) {
                 return json(['code' => 404, 'message' => '需求不存在']);
             }
@@ -173,7 +173,7 @@ class Progress extends BaseController
             }
             
             // 更新数据
-            $result = Db::name('project_requirements')
+            $result = Db::name('requirements')
                 ->where('id', $id)
                 ->update($updateData);
             
@@ -203,13 +203,13 @@ class Progress extends BaseController
             }
             
             // 验证需求是否存在
-            $requirement = Db::name('project_requirements')->where('id', $id)->find();
+            $requirement = Db::name('requirements')->where('id', $id)->find();
             if (!$requirement) {
                 return json(['code' => 404, 'message' => '需求不存在']);
             }
             
             // 删除需求
-            $result = Db::name('project_requirements')->where('id', $id)->delete();
+            $result = Db::name('requirements')->where('id', $id)->delete();
             
             if ($result) {
                 return json([
@@ -237,13 +237,13 @@ class Progress extends BaseController
             }
             
             // 验证项目是否存在
-            $project = Db::name('project')->where('id', $projectId)->find();
+            $project = Db::name('projects')->where('id', $projectId)->find();
             if (!$project) {
                 return json(['code' => 404, 'message' => '项目不存在']);
             }
             
             // 统计各状态的需求数量
-            $stats = Db::name('project_requirements')
+            $stats = Db::name('requirements')
                 ->where('project_id', $projectId)
                 ->field('status, count(*) as count')
                 ->group('status')
@@ -337,6 +337,7 @@ class Progress extends BaseController
             
             // 准备插入数据
             $insertData = [
+                'id' => uuid(),
                 'name' => trim($data['name']),
                 'title_template' => trim($data['title_template']),
                 'description_template' => trim($data['description_template']),
@@ -377,7 +378,7 @@ class Progress extends BaseController
             }
             
             // 获取需求基本信息
-            $requirement = Db::name('project_requirements')->where('id', $id)->find();
+            $requirement = Db::name('requirements')->where('id', $id)->find();
             if (!$requirement) {
                 return json(['code' => 404, 'message' => '需求不存在']);
             }
@@ -441,13 +442,14 @@ class Progress extends BaseController
             }
             
             // 验证需求是否存在
-            $requirement = Db::name('project_requirements')->where('id', $data['requirement_id'])->find();
+            $requirement = Db::name('requirements')->where('id', $data['requirement_id'])->find();
             if (!$requirement) {
                 return json(['code' => 404, 'message' => '需求不存在']);
             }
             
             // 准备插入数据
             $insertData = [
+                'id' => uuid(),
                 'requirement_id' => $data['requirement_id'],
                 'user_name' => $data['user_name'] ?? 'PeterSun',
                 'hours' => $data['hours'],
@@ -465,7 +467,7 @@ class Progress extends BaseController
                     ->where('requirement_id', $data['requirement_id'])
                     ->sum('hours');
                 
-                Db::name('project_requirements')
+                Db::name('requirements')
                     ->where('id', $data['requirement_id'])
                     ->update(['actual_hours' => $totalHours]);
                 
@@ -496,13 +498,14 @@ class Progress extends BaseController
             }
             
             // 验证需求是否存在
-            $requirement = Db::name('project_requirements')->where('id', $data['requirement_id'])->find();
+            $requirement = Db::name('requirements')->where('id', $data['requirement_id'])->find();
             if (!$requirement) {
                 return json(['code' => 404, 'message' => '需求不存在']);
             }
             
             // 准备插入数据
             $insertData = [
+                'id' => uuid(),
                 'requirement_id' => $data['requirement_id'],
                 'parent_id' => $data['parent_id'] ?? null,
                 'content' => trim($data['content']),
@@ -543,7 +546,7 @@ class Progress extends BaseController
             }
             
             // 验证需求是否存在
-            $requirement = Db::name('project_requirements')->where('id', $requirementId)->find();
+            $requirement = Db::name('requirements')->where('id', $requirementId)->find();
             if (!$requirement) {
                 return json(['code' => 404, 'message' => '需求不存在']);
             }
@@ -581,6 +584,7 @@ class Progress extends BaseController
             
             // 保存附件信息
             $insertData = [
+                'id' => uuid(),
                 'requirement_id' => $requirementId,
                 'filename' => $filename,
                 'original_name' => $file->getOriginalName(),

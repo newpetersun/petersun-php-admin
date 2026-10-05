@@ -8,13 +8,10 @@ use think\Request;
 use think\facade\Db;
 use think\Response;
 use app\service\JwtService;
+use app\service\VpConfig;
 
 class WechatAuth extends BaseController
 {
-    // 微信小程序配置
-    private $appId = 'wx63617f985d8c028c';
-    private $appSecret = 'a0a3d18cc49c5f70174245bf5e79d558';
-    
     /**
      * 微信登录 - 通过code获取openid
      */
@@ -115,18 +112,31 @@ class WechatAuth extends BaseController
                 'province' => $data['province'] ?? '',
                 'city' => $data['city'] ?? '',
                 'language' => $data['language'] ?? 'zh_CN',
+                'code_age' => 0,
                 'visit_count' => 0,
                 'like_count' => 0,
-                'is_new_user' => 0,
-                'user_type' => 'user', // 统一用户类型
+                'user_type' => 'visitor', // 枚举值：visitor/customer/webmaster
                 'status' => 1,
-                'role' => '访客',
                 'create_time' => date('Y-m-d H:i:s'),
                 'update_time' => date('Y-m-d H:i:s'),
                 'last_login_time' => date('Y-m-d H:i:s')
             ];
             
-            $userId = Db::name('users')->insertGetId($insertData);
+            // users.id 为显式 UUID（非自增），不能用 insertGetId（会返回错误的 lastInsertId）
+            $userId = uuid();
+            Db::name('users')->insert(array_merge(['id' => $userId], $insertData));
+
+            // 初始化用户钱包（金币余额，默认 0）
+            Db::name('user_wallet')->insert([
+                'id'           => uuid(),
+                'user_id'      => $userId,
+                'balance'      => 0,
+                'frozen'       => 0,
+                'total_earned' => 0,
+                'total_spent'  => 0,
+                'create_time'  => date('Y-m-d H:i:s'),
+                'update_time'  => date('Y-m-d H:i:s')
+            ]);
             
             // 生成正式token
             $token = $this->generateToken($userId);
@@ -144,7 +154,7 @@ class WechatAuth extends BaseController
                         'avatar' => $data['avatarUrl'],
                         'visit_count' => 0,
                         'like_count' => 0,
-                        'user_type' => 'user'
+                        'user_type' => 'visitor'
                     ]
                 ]
             ]);
@@ -161,8 +171,8 @@ class WechatAuth extends BaseController
     {
         $url = "https://api.weixin.qq.com/sns/jscode2session";
         $params = [
-            'appid' => $this->appId,
-            'secret' => $this->appSecret,
+            'appid' => VpConfig::get('VP_APPID', 'wx63617f985d8c028c'),
+            'secret' => VpConfig::get('VP_APP_SECRET', 'a0a3d18cc49c5f70174245bf5e79d558'),
             'js_code' => $code,
             'grant_type' => 'authorization_code'
         ];

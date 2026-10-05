@@ -29,27 +29,18 @@ return [
     // 沙箱 AppKey（env = 1）
     'sandbox_app_key' => env('VP_SANDBOX_APP_KEY', ''),
 
-    // 支付环境：0=现网（正式环境），1=沙箱。文档要求 env 固定填 0
+    // 支付环境：0=现网（正式环境，真实扣款），1=沙箱（联调用，不真实扣款）。
+    // 沙箱需同时配置 VP_SANDBOX_APP_KEY 并在 MP 将道具发布到沙箱
     'env'        => (int) env('VP_ENV', 0),
 
     // 道具列表：需与 MP 后台【虚拟支付 → 道具管理】中已创建并发布的道具完全一致
     // product_id = 后台道具 ID；price = 单价（单位：分），必须与后台道具价格一致
     'goods'      => [
-        // 示例：AI 对话次数包。上线前请在 MP 后台创建同名道具并发布，再核对 price
-        'ai_chat_100' => [
-            'product_id' => 'ai_chat_100',
-            'name'       => 'AI 对话 100 次',
-            'desc'       => '购买后可在 AI 对话中额外提问 100 次',
-            'price'      => 100,   // 单位：分（1.00 元）
-            'grant'      => 100,   // 发货时发放的权益数量
-        ],
-        'ai_chat_500' => [
-            'product_id' => 'ai_chat_500',
-            'name'       => 'AI 对话 500 次',
-            'desc'       => '购买后可在 AI 对话中额外提问 500 次',
-            'price'      => 400,   // 单位：分（4.00 元）
-            'grant'      => 500,
-        ],
+        'coin_1' => ['product_id' => 'coin_1', 'name' => '1', 'desc' => '充值 1 金币', 'price' => 100, 'grant' => 1],
+        'coin_10' => ['product_id' => 'coin_10', 'name' => '10', 'desc' => '充值 10 金币', 'price' => 1000, 'grant' => 10],
+        'coin_20' => ['product_id' => 'coin_20', 'name' => '20', 'desc' => '充值 20 金币', 'price' => 2000, 'grant' => 20],
+        'coin_40' => ['product_id' => 'coin_40', 'name' => '40', 'desc' => '充值 40 金币', 'price' => 4000, 'grant' => 40],
+        'coin_50' => ['product_id' => 'coin_50', 'name' => '50', 'desc' => '充值 50 金币', 'price' => 5000, 'grant' => 50],
     ],
 
     // 消息推送配置（开发管理 → 消息推送）

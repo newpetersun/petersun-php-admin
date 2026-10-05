@@ -18,6 +18,9 @@ use think\facade\Route;
         Route::post('complete-info', 'WechatAuth/completeUserInfo'); // 完善用户信息
         Route::get('verify-token', 'WechatAuth/verifyToken'); // 验证token
     });
+
+    // 小程序端确认后台扫码登录（需用户 JWT）
+    Route::post('wechat/scan-confirm', 'AdminLogin/scanConfirm')->middleware('JwtAuth');
     
     // 需要认证的接口
     Route::group('auth', function () {
@@ -37,9 +40,16 @@ use think\facade\Route;
         Route::get('get-info', 'User/getUserInfo'); // 获取微信用户信息
         Route::post('update-stats', 'User/updateUserStats'); // 更新用户统计信息
         Route::post('upload-avatar', 'User/uploadAvatar'); // 上传用户头像
-        Route::post('upload-cover', 'User/uploadCover'); // 上传用户封面
+        Route::post('upload-cover', 'User/uploadCover')->middleware('JwtAuth'); // 上传用户封面(需登录,默认待审核)
     });
-    
+
+    // 后台用户管理接口（需管理员）
+    Route::group('user', function () {
+        Route::get('list', 'User/list');            // 用户列表
+        Route::post('create', 'User/create');        // 新建用户
+        Route::post('delete', 'User/delete');        // 删除用户
+    })->middleware(['JwtAuth', 'AdminAuth']);
+
     // 项目相关接口需鉴权
     Route::group('project', function () {
         Route::post('create', 'Project/create'); // 创建项目
@@ -89,6 +99,14 @@ use think\facade\Route;
         Route::get('popular-pages', 'Admin/popularPages'); // 获取热门页面
         Route::get('system-info', 'Admin/systemInfo'); // 获取系统信息
     })->middleware(['JwtAuth', 'AdminAuth']);
+
+    // 后台登录（公开，无需鉴权）
+    Route::group('admin', function () {
+        Route::get('captcha', 'AdminLogin/captcha');                // 获取登录图形验证码
+        Route::post('password-login', 'AdminLogin/passwordLogin'); // 管理员密码登录
+        Route::post('scan-ticket', 'AdminLogin/scanTicket');        // 创建扫码登录票据+小程序码
+        Route::get('scan-status', 'AdminLogin/scanStatus');         // 轮询扫码状态
+    });
     
     // 系统设置接口
     Route::group('setting', function () {
@@ -176,14 +194,87 @@ use think\facade\Route;
         Route::get('goods', 'Pay/goods');                  // 道具列表
         Route::get('status', 'Pay/status');                // 订单状态（前端轮询）
         Route::post('order', 'Pay/order');                 // 下单，返回 payData
+        Route::get('wallet', 'Pay/wallet');                // 钱包余额 + 购买记录
     })->middleware('JwtAuth');
 
     Route::group('pay', function () {
         Route::post('query', 'Pay/query');                 // 手动兜底查单
     })->middleware(['JwtAuth', 'AdminAuth']);
 
-    // 发货推送：微信平台回调，不能挂登录态中间件
-    Route::post('pay/notify', 'Pay/notify');
+    // 发货推送：微信平台回调（GET 用于 Token 验证握手，POST 用于发货推送），不能挂登录态中间件
+    Route::rule('pay/notify', 'Pay/notify', 'GET|POST');
+
+    // 论坛板块接口（读，无需鉴权）
+    Route::group('board', function () {
+        Route::get('list', 'Board/list');           // 板块列表
+        Route::get('detail', 'Board/detail');        // 板块详情（公告/版主/置顶/最新帖子）
+    });
+
+    // 论坛板块写操作（需登录）
+    Route::group('board', function () {
+        Route::post('join', 'Board/join');           // 加入/退出板块
+        Route::post('follow', 'Board/follow');       // 关注/取消关注版主
+    })->middleware('JwtAuth');
+
+    // 论坛板块管理（管理端，需管理员）
+    Route::group('board', function () {
+        Route::get('admin-list', 'Board/adminList');   // 板块列表（含禁用）
+        Route::post('create', 'Board/create');          // 创建板块
+        Route::post('update/:id', 'Board/update');      // 更新板块
+        Route::delete('delete/:id', 'Board/delete');    // 删除板块
+        Route::post('status/:id', 'Board/status');      // 更新板块状态
+    })->middleware(['JwtAuth', 'AdminAuth']);
+
+    // 论坛帖子接口（读，无需鉴权；detail 内自行解析 token 判断已购）
+    Route::group('post', function () {
+        Route::get('list', 'Post/list');             // 帖子列表（可按板块/分类/关键词/精华/排序）
+        Route::get('detail/:id', 'Post/detail')->pattern(['id' => '[\w-]+']);     // 帖子详情（正文/评论/点赞态），id 为 UUID 含连字符
+        Route::get('comments/:id', 'Post/comments')->pattern(['id' => '[\w-]+']);  // 评论列表，id 为 UUID 含连字符
+        Route::get('poster-code', 'Post/posterCode');                            // 生成帖子分享小程序码（海报用）
+    });
+
+    // 论坛帖子写操作（需登录）
+    Route::group('post', function () {
+        Route::post('create', 'Post/create');        // 发布帖子
+        Route::post('upload-image', 'Post/uploadImage'); // 帖子图片上传
+        Route::post('like', 'Post/like');            // 点赞/取消点赞
+        Route::post('comment', 'Post/comment');      // 发表评论
+        Route::post('buy', 'Post/buy');              // 金币购买解锁付费帖正文
+        Route::post('report', 'Post/report');        // 举报帖子
+        Route::delete('delete/:id', 'Post/delete');  // 删除帖子(管理员)
+        Route::post('update/:id', 'Post/update');    // 更新帖子(管理员)
+    })->middleware('JwtAuth');
+
+    // 论坛首页聚合接口（热门话题 / 推荐阅读 / 活跃作者，只读免鉴权）
+    Route::group('forum', function () {
+        Route::get('hot-topics', 'Forum/hotTopics');        // 热门话题
+        Route::get('recommended', 'Forum/recommended');      // 推荐阅读
+        Route::get('active-authors', 'Forum/activeAuthors'); // 活跃作者
+    });
+
+    // 综合搜索（文章 / 板块 / 用户，只读免鉴权）
+    Route::get('search', 'Search/index');
+
+    // 用户认证接口（需登录）
+    Route::group('certify', function () {
+        Route::post('submit', 'Certification/submit'); // 提交认证申请
+        Route::get('mine', 'Certification/mine');      // 我的认证申请状态
+    })->middleware('JwtAuth');
+
+    // 后台认证审核（需管理员）
+    Route::group('certify', function () {
+        Route::get('list', 'Certification/list');     // 认证申请列表
+        Route::post('review', 'Certification/review'); // 审核通过/驳回
+    })->middleware(['JwtAuth', 'AdminAuth']);
+
+    // 用户认证查询（公开，按 userId 查认证状态/类型，用于主页徽章）
+    Route::get('certify/status', 'Certification/status');
+
+    // 用户关注接口（需登录）
+    Route::group('follow', function () {
+        Route::post('toggle', 'Follow/toggle'); // 关注/取消关注
+        Route::get('status', 'Follow/status');  // 查询关注状态
+    })->middleware('JwtAuth');
 
 // 默认路由
 Route::get('/', 'Index/index');

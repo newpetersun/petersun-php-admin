@@ -65,7 +65,8 @@ class Contact extends BaseController
                 $data['working_hours'] = json_encode($data['working_hours']);
             }
             
-            $result = Db::name('contact')->where('id', 1)->update($data);
+            $id = $request->param('id', '');
+            $result = Db::name('contact_messages')->where('id', $id)->update($data);
             
             if ($result !== false) {
                 return json(['code' => 200, 'message' => '更新成功']);
@@ -92,7 +93,7 @@ class Contact extends BaseController
                 $where[] = ['is_read', '=', $status];
             }
             
-            $messages = Db::name('contact_message')
+            $messages = Db::name('contact_messages')
                 ->where($where)
                 ->order('create_time', 'desc')
                 ->paginate([
@@ -142,7 +143,7 @@ class Contact extends BaseController
             }
             
             // 检查是否重复提交（5分钟内相同邮箱和内容）
-            $recentMessage = Db::name('contact_message')
+            $recentMessage = Db::name('contact_messages')
                 ->where('email', $data['email'])
                 ->where('message', $data['message'])
                 ->where('create_time', '>', date('Y-m-d H:i:s', time() - 300))
@@ -163,7 +164,7 @@ class Contact extends BaseController
                 'create_time' => date('Y-m-d H:i:s')
             ];
             
-            $result = Db::name('contact_message')->insert($messageData);
+            $result = Db::name('contact_messages')->insert(array_merge(['id' => uuid()], $messageData));
             
             if ($result) {
                 return json(['code' => 200, 'message' => '留言提交成功']);
@@ -181,7 +182,7 @@ class Contact extends BaseController
     public function markAsRead($id): Response
     {
         try {
-            $result = Db::name('contact_message')
+            $result = Db::name('contact_messages')
                 ->where('id', $id)
                 ->update([
                     'is_read' => 1,
@@ -204,7 +205,7 @@ class Contact extends BaseController
     public function deleteMessage($id): Response
     {
         try {
-            $result = Db::name('contact_message')->where('id', $id)->delete();
+            $result = Db::name('contact_messages')->where('id', $id)->delete();
             
             if ($result) {
                 return json(['code' => 200, 'message' => '删除成功']);
@@ -222,9 +223,9 @@ class Contact extends BaseController
     public function stats(): Response
     {
         try {
-            $totalMessages = Db::name('contact_message')->count();
-            $unreadMessages = Db::name('contact_message')->where('is_read', 0)->count();
-            $todayMessages = Db::name('contact_message')
+            $totalMessages = Db::name('contact_messages')->count();
+            $unreadMessages = Db::name('contact_messages')->where('is_read', 0)->count();
+            $todayMessages = Db::name('contact_messages')
                 ->where('create_time', '>=', date('Y-m-d 00:00:00'))
                 ->count();
             
@@ -254,7 +255,7 @@ class Contact extends BaseController
                 return json(['code' => 400, 'message' => '请选择要标记的留言']);
             }
             
-            $result = Db::name('contact_message')
+            $result = Db::name('contact_messages')
                 ->whereIn('id', $ids)
                 ->update([
                     'is_read' => 1,
@@ -283,7 +284,7 @@ class Contact extends BaseController
                 return json(['code' => 400, 'message' => '请选择要删除的留言']);
             }
             
-            $result = Db::name('contact_message')->whereIn('id', $ids)->delete();
+            $result = Db::name('contact_messages')->whereIn('id', $ids)->delete();
             
             if ($result) {
                 return json(['code' => 200, 'message' => '批量删除成功']);

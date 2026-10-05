@@ -15,7 +15,6 @@ class User extends Model
     
     // 设置字段信息
     protected $schema = [
-        'id'              => 'int',
         'username'        => 'string',
         'password'        => 'string',
         'email'           => 'string',

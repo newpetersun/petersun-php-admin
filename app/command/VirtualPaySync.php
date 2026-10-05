@@ -8,12 +8,10 @@ use think\console\Command;
 use think\console\Input;
 use think\console\Output;
 
-/**
- * 虚拟支付兜底查单：发货推送丢失时，主动调用 query_order 补发货
- *
- * 建议 crontab 每 5 分钟执行一次：
- *   */5 * * * * cd /path/to/petersun-php-admin && php think virtualpay:sync >> /tmp/vp_sync.log 2>&1
- */
+// 虚拟支付兜底查单：发货推送丢失时，主动调用 query_order 补发货
+//
+// 建议 crontab 每 5 分钟执行一次：
+//   */5 * * * * cd /path/to/petersun-php-admin && php think virtualpay:sync >> /tmp/vp_sync.log 2>&1
 class VirtualPaySync extends Command
 {
     protected function configure(): void

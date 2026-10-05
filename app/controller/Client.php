@@ -116,7 +116,7 @@ class Client extends BaseController
             ];
             
             // 获取关联的项目
-            $projects = Db::name('project')
+            $projects = Db::name('projects')
                 ->where('client_id', $id)
                 ->order('create_time', 'desc')
                 ->select()
@@ -171,7 +171,7 @@ class Client extends BaseController
             }
             
             // 获取该客户的所有项目
-            $projects = Db::name('project')
+            $projects = Db::name('projects')
                 ->where('client_id', $id)
                 ->order('create_time', 'desc')
                 ->select()

@@ -25,7 +25,7 @@ class Category extends BaseController
                 $where[] = ['name|description', 'like', "%$keyword%"];
             }
             
-            $categories = Db::name('project_category')
+            $categories = Db::name('project_categories')
                 ->where($where)
                 ->order('sort_order', 'asc')
                 ->paginate([
@@ -54,7 +54,7 @@ class Category extends BaseController
     public function all(): Response
     {
         try {
-            $categories = Db::name('project_category')
+            $categories = Db::name('project_categories')
                 ->where('status', 1)
                 ->order('sort_order', 'asc')
                 ->select()
@@ -84,7 +84,7 @@ class Category extends BaseController
             }
             
             // 检查key是否已存在
-            $exists = Db::name('project_category')->where('key', $data['key'])->find();
+            $exists = Db::name('project_categories')->where('board_key', $data['key'])->find();
             if ($exists) {
                 return json(['code' => 400, 'message' => '分类标识已存在']);
             }
@@ -92,8 +92,12 @@ class Category extends BaseController
             // 设置默认值
             $data['sort_order'] = $data['sort_order'] ?? 0;
             $data['status'] = isset($data['status']) ? (int)$data['status'] : 1;
-            
-            $id = Db::name('project_category')->insertGetId($data);
+
+            // 新架构列名为 board_key（避免保留字 key）
+            $data['board_key'] = $data['key'];
+            unset($data['key']);
+
+            $id = Db::name('project_categories')->insertGetId(array_merge(['id' => uuid()], $data));
             
             return json([
                 'code' => 200,
@@ -119,8 +123,8 @@ class Category extends BaseController
             }
             
             // 检查key是否已存在（除了当前记录）
-            $exists = Db::name('project_category')
-                ->where('key', $data['key'])
+            $exists = Db::name('project_categories')
+                ->where('board_key', $data['key'])
                 ->where('id', '<>', $id)
                 ->find();
                 
@@ -128,7 +132,11 @@ class Category extends BaseController
                 return json(['code' => 400, 'message' => '分类标识已存在']);
             }
             
-            Db::name('project_category')->where('id', $id)->update($data);
+            // 新架构列名为 board_key（避免保留字 key）
+            $data['board_key'] = $data['key'];
+            unset($data['key']);
+
+            Db::name('project_categories')->where('id', $id)->update($data);
             
             return json([
                 'code' => 200,
@@ -146,12 +154,12 @@ class Category extends BaseController
     {
         try {
             // 检查是否有项目使用此分类
-            $count = Db::name('project')->where('category_id', $id)->count();
+            $count = Db::name('projects')->where('category_id', $id)->count();
             if ($count > 0) {
                 return json(['code' => 400, 'message' => '该分类下有' . $count . '个项目，无法删除']);
             }
             
-            Db::name('project_category')->where('id', $id)->delete();
+            Db::name('project_categories')->where('id', $id)->delete();
             
             return json([
                 'code' => 200,
@@ -168,7 +176,7 @@ class Category extends BaseController
     public function detail($id): Response
     {
         try {
-            $category = Db::name('project_category')->where('id', $id)->find();
+            $category = Db::name('project_categories')->where('id', $id)->find();
             
             if (!$category) {
                 return json(['code' => 404, 'message' => '分类不存在']);
@@ -192,7 +200,7 @@ class Category extends BaseController
         try {
             $status = $request->param('status', 0);
             
-            Db::name('project_category')->where('id', $id)->update(['status' => (int)$status]);
+            Db::name('project_categories')->where('id', $id)->update(['status' => (int)$status]);
             
             return json([
                 'code' => 200,

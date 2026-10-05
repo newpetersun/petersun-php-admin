@@ -1,0 +1,5 @@
+-- 已废弃：金币余额不再放在 users.coins，已迁移到独立的 user_wallet 表。
+-- 请改用 user_wallet.sql 创建钱包表。
+-- 若你的存量 users 表残留 coins 列且想清理，可手动执行（MySQL 8 / MariaDB 支持 IF EXISTS）：
+--   ALTER TABLE `users` DROP COLUMN IF EXISTS `coins`;
+-- （旧版本 MySQL 不支持 IF EXISTS，则确认无该列后忽略即可。）

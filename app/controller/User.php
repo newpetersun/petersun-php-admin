@@ -15,20 +15,115 @@ class User extends BaseController
 		return json(['code' => 200, 'message' => '用户管理接口']);
 	}
     /**
-     * 获取用户信息（单个）
+     * 获取用户公开资料（单个）
+     * 仅返回主页需要的字段：基础资料 + 封面 + 认证 + 文章，
+     * 剔除 token、邮箱、手机、社交账号等敏感/无用字段。
      */
     public function info(Request $request): Response
     {
         try {
-            $id = $request->param('id', 1);
-            $user = UserModel::find($id);
+            $id = $request->param('id', '');
+            if (empty($id)) {
+                return json(['code' => 400, 'message' => '缺少用户ID']);
+            }
+            $user = Db::name('users')->where('id', $id)->find();
             if (!$user) {
                 return json(['code' => 404, 'message' => '用户信息不存在']);
             }
+
+            // 公开资料白名单（不返回 token / email / phone / qq / wechat / openid 等）
+            $basic = [
+                'id'          => $user['id'],
+                'nickname'    => $user['nickname'] ?? '',
+                'avatar'      => $user['avatar'] ?? '',
+                'gender'      => $user['gender'] ?? 0,
+                'code_age'    => $user['code_age'] ?? '',
+                'address'     => $user['address'] ?? '',
+                'user_type'   => $user['user_type'] ?? '',
+                'role'        => $user['role'] ?? '',
+                'status'      => $user['status'] ?? 0,
+                'visit_count' => $user['visit_count'] ?? 0,
+                'like_count'  => $user['like_count'] ?? 0,
+                'github'      => $user['github'] ?? '',
+                'web_url'     => $user['web_url'] ?? '',
+                'create_time' => $user['create_time'] ?? '',
+            ];
+
+            // 封面：取该用户最新一条（含审核状态）
+            $cover = Db::name('user_covers')
+                ->where('user_id', $id)
+                ->order('create_time', 'desc')
+                ->field('image, status, create_time')
+                ->find();
+
+            // 认证：取最新一条认证记录
+            $cert = Db::name('user_certifications')
+                ->where('user_id', $id)
+                ->order('create_time', 'desc')
+                ->field('type, status')
+                ->find();
+            $certification = $cert
+                ? ['type' => $cert['type'], 'status' => $cert['status']]
+                : ['type' => '', 'status' => 'none'];
+
+            // 文章：该用户已发布帖子（最新 10 条 + 总数），直接拼装为前端 PostCard 所需结构
+            $rawArticles = Db::name('forum_posts')
+                ->where('user_id', $id)
+                ->where('status', 1)
+                ->order('create_time', 'desc')
+                ->limit(10)
+                ->field('id, title, summary, cover_images, tags, category, like_count, comment_count, views, create_time')
+                ->select()
+                ->toArray();
+            $articleList = array_map(function ($a) use ($user, $id) {
+                $images = $a['cover_images'] ?? '';
+                if (is_string($images)) {
+                    $images = json_decode($images, true) ?: [];
+                }
+                if (!is_array($images)) {
+                    $images = [];
+                }
+                $tags = $a['tags'] ?? '';
+                if (is_string($tags)) {
+                    $tags = json_decode($tags, true) ?: [];
+                }
+                if (!is_array($tags)) {
+                    $tags = [];
+                }
+                return [
+                    'id'           => $a['id'],
+                    'title'        => $a['title'] ?? '',
+                    'summary'      => $a['summary'] ?? '',
+                    'author'       => $user['nickname'] ?? '',
+                    'authorAvatar' => $user['avatar'] ?? '',
+                    'userId'       => $a['user_id'] ?? $id,
+                    'category'     => $a['category'] ?? 'other',
+                    'tags'         => $tags,
+                    'createdAt'    => $a['create_time'] ?? '',
+                    'views'        => (int)($a['views'] ?? 0),
+                    'comments'     => (int)($a['comment_count'] ?? 0),
+                    'likes'        => (int)($a['like_count'] ?? 0),
+                    'isEssence'    => false,
+                    'type'         => 'blog',
+                    'coverImages'  => array_slice($images, 0, 9),
+                    ];
+            }, $rawArticles);
+            $articleTotal = Db::name('forum_posts')
+                ->where('user_id', $id)
+                ->where('status', 1)
+                ->count();
+
             return json([
-                'code' => 200,
+                'code'    => 200,
                 'message' => '获取成功',
-                'data' => $user
+                'data'    => array_merge($basic, [
+                    'cover'         => $cover ?: null,
+                    'certification' => $certification,
+                    'articles'      => [
+                        'total' => $articleTotal,
+                        'list'  => $articleList,
+                    ],
+                ])
             ]);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
@@ -113,7 +208,7 @@ class User extends BaseController
             }
             $data['create_time'] = date('Y-m-d H:i:s');
             $data['avatar'] = $data['avatar'] ?? '/static/images/default-avatar.jpg';
-            $id = Db::name('users')->insertGetId($data);
+            $id = Db::name('users')->insertGetId(array_merge(['id' => uuid()], $data));
             return json(['code' => 200, 'message' => '添加成功', 'data' => ['id' => $id]]);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
@@ -176,8 +271,8 @@ class User extends BaseController
     public function getSplashData(): Response
     {
         try {
-            // 获取 ID 为 1 的用户头像
-            $user = Db::name('users')->where('id', 1)->field('avatar')->find();
+            // 获取站点主理人(webmaster)的头像作为启动页头像；无 webmaster 时回退默认值
+            $user = Db::name('users')->where('user_type', 'webmaster')->field('avatar, nickname')->find();
             $avatar = $user['avatar'] ?? '/static/images/peter.jpg';
 			$nickname = $user['nickname'] ?? 'Sam';
             
@@ -209,7 +304,7 @@ class User extends BaseController
     {
         try {
             // 从technology表中获取启用的技术
-            $technologies = Db::name('technology')
+            $technologies = Db::name('technologies')
                 ->field('id, name, img, sort_order')
                 ->where('status', 1)
                 ->order('id', 'asc')
@@ -291,44 +386,66 @@ class User extends BaseController
     }
 
     /**
-     * 上传用户封面
+     * 上传用户封面（需登录）
+     * 文件保存后写入 user_covers 表，状态默认为 pending（待审核），审核通过后才生效
      */
     public function uploadCover(Request $request): Response
     {
         try {
+            $userId = $request->userId ?? '';
+            if (!$userId) {
+                return json(['code' => 401, 'message' => '未登录或登录已过期']);
+            }
+
             $file = $request->file('cover');
             if (!$file) {
                 return json(['code' => 400, 'message' => '未上传文件']);
             }
-            
+
             // 验证文件类型
             $allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
             $ext = strtolower($file->getOriginalExtension());
             if (!in_array($ext, $allowedTypes)) {
                 return json(['code' => 400, 'message' => '不支持的文件类型，仅支持：' . implode(', ', $allowedTypes)]);
             }
-            
+
             // 验证文件大小（最大5MB）
             if ($file->getSize() > 5 * 1024 * 1024) {
                 return json(['code' => 400, 'message' => '文件大小不能超过5MB']);
             }
-            
+
             $savePath = '/static/images/cover/';
             $filename = uniqid('cover_') . '.' . $ext;
-            
+
             // 确保目录存在
             $fullPath = public_path() . $savePath;
             if (!is_dir($fullPath)) {
                 mkdir($fullPath, 0755, true);
             }
-            
+
             $info = $file->move($fullPath, $filename);
-            if ($info) {
-                $url = $savePath . $filename;
-                return json(['code' => 200, 'message' => '上传成功', 'data' => ['url' => $url]]);
-            } else {
+            if (!$info) {
                 return json(['code' => 500, 'message' => $file->getError()]);
             }
+
+            $url = $savePath . $filename;
+
+            // 写入封面表，状态默认 pending（待审核）
+            $coverId = uuid();
+            Db::name('user_covers')->insert([
+                'id'          => $coverId,
+                'user_id'     => $userId,
+                'image'       => $url,
+                'status'      => 'pending',
+                'create_time' => date('Y-m-d H:i:s'),
+                'update_time' => date('Y-m-d H:i:s')
+            ]);
+
+            return json([
+                'code'    => 200,
+                'message' => '上传成功，封面待审核',
+                'data'    => ['url' => $url, 'cover_id' => $coverId, 'status' => 'pending']
+            ]);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
         }
@@ -391,7 +508,7 @@ class User extends BaseController
                     'update_time' => date('Y-m-d H:i:s')
                 ];
                 
-                $userId = Db::name('users')->insertGetId($insertData);
+                $userId = Db::name('users')->insertGetId(array_merge(['id' => uuid()], $insertData));
             }
             
             return json([

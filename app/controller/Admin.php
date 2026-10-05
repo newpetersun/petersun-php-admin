@@ -18,16 +18,16 @@ class Admin extends BaseController
     {
         try {
             // 统计数据
-            $totalProjects = Db::name('project')->where('status', 1)->count();
-            $totalMessages = Db::name('contact_message')->count();
-            $unreadMessages = Db::name('contact_message')->where('is_read', 0)->count();
+            $totalProjects = Db::name('projects')->where('status', 1)->count();
+            $totalMessages = Db::name('contact_messages')->count();
+            $unreadMessages = Db::name('contact_messages')->where('is_read', 0)->count();
             $todayVisits = $this->getTodayVisits();
             
             // 最近活动
             $recentActivities = $this->getRecentActivities();
             
             // 项目分类统计
-            $projectCategories = Db::name('project')
+            $projectCategories = Db::name('projects')
                 ->alias('p')
                 ->join('project_category pc', 'p.category_id = pc.id')
                 ->where('p.status', 1)
@@ -65,15 +65,15 @@ class Admin extends BaseController
             $monthVisits = $this->getMonthVisits();
             
             // 留言统计
-            $totalMessages = Db::name('contact_message')->count();
-            $unreadMessages = Db::name('contact_message')->where('is_read', 0)->count();
-            $todayMessages = Db::name('contact_message')
+            $totalMessages = Db::name('contact_messages')->count();
+            $unreadMessages = Db::name('contact_messages')->where('is_read', 0)->count();
+            $todayMessages = Db::name('contact_messages')
                 ->where('create_time', '>=', date('Y-m-d 00:00:00'))
                 ->count();
             
             // 项目统计
-            $totalProjects = Db::name('project')->where('status', 1)->count();
-            $featuredProjects = Db::name('project')->where('is_featured', 1)->where('status', 1)->count();
+            $totalProjects = Db::name('projects')->where('status', 1)->count();
+            $featuredProjects = Db::name('projects')->where('is_featured', 1)->where('status', 1)->count();
             
             // 设备统计
             $deviceStats = $this->getDeviceStats();
@@ -138,7 +138,7 @@ class Admin extends BaseController
     public function popularPages(): Response
     {
         try {
-            $pages = Db::name('visit_log')
+            $pages = Db::name('visit_logs')
                 ->field('page, count(*) as count')
                 ->group('page')
                 ->order('count', 'desc')
@@ -187,7 +187,7 @@ class Admin extends BaseController
      */
     private function getTodayVisits(): int
     {
-        return Db::name('visit_log')
+        return Db::name('visit_logs')
             ->where('create_time', '>=', date('Y-m-d 00:00:00'))
             ->count();
     }
@@ -198,7 +198,7 @@ class Admin extends BaseController
     private function getWeekVisits(): int
     {
         $weekStart = date('Y-m-d 00:00:00', strtotime('monday this week'));
-        return Db::name('visit_log')
+        return Db::name('visit_logs')
             ->where('create_time', '>=', $weekStart)
             ->count();
     }
@@ -209,7 +209,7 @@ class Admin extends BaseController
     private function getMonthVisits(): int
     {
         $monthStart = date('Y-m-01 00:00:00');
-        return Db::name('visit_log')
+        return Db::name('visit_logs')
             ->where('create_time', '>=', $monthStart)
             ->count();
     }
@@ -219,7 +219,7 @@ class Admin extends BaseController
      */
     private function getVisitsByDate(string $date): int
     {
-        return Db::name('visit_log')
+        return Db::name('visit_logs')
             ->where('create_time', '>=', $date . ' 00:00:00')
             ->where('create_time', '<', $date . ' 23:59:59')
             ->count();
@@ -230,7 +230,7 @@ class Admin extends BaseController
      */
     private function getDeviceStats(): array
     {
-        $stats = Db::name('visit_log')
+        $stats = Db::name('visit_logs')
             ->field('device_type, count(*) as count')
             ->group('device_type')
             ->select()
@@ -258,7 +258,7 @@ class Admin extends BaseController
         $activities = [];
         
         // 最近的项目
-        $recentProjects = Db::name('project')
+        $recentProjects = Db::name('projects')
             ->where('status', 1)
             ->order('create_time', 'desc')
             ->limit(3)
@@ -267,7 +267,7 @@ class Admin extends BaseController
         
         foreach ($recentProjects as $project) {
             $activities[] = [
-                'id' => 'project_' . $project['id'],
+                'id' => $project['id'],
                 'type' => 'project',
                 'title' => '新增项目：' . $project['title'],
                 'time' => $this->getTimeAgo($project['create_time']),
@@ -276,7 +276,7 @@ class Admin extends BaseController
         }
         
         // 最近的留言
-        $recentMessages = Db::name('contact_message')
+        $recentMessages = Db::name('contact_messages')
             ->order('create_time', 'desc')
             ->limit(3)
             ->select()
@@ -284,7 +284,7 @@ class Admin extends BaseController
         
         foreach ($recentMessages as $message) {
             $activities[] = [
-                'id' => 'message_' . $message['id'],
+                'id' => $message['id'],
                 'type' => 'message',
                 'title' => '收到新留言：' . $message['name'],
                 'time' => $this->getTimeAgo($message['create_time']),

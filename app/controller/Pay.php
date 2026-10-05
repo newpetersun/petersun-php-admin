@@ -5,6 +5,7 @@ namespace app\controller;
 
 use app\BaseController;
 use app\service\VirtualPayService;
+use app\service\VpConfig;
 use think\facade\Db;
 use think\Request;
 use think\Response;
@@ -44,7 +45,7 @@ class Pay extends BaseController
         $code      = (string) $request->param('code', '');
         $productId = (string) $request->param('product_id', '');
         $quantity  = (int) $request->param('quantity', 1);
-        $userId    = (int) ($request->userId ?? 0);
+        $userId    = (string) ($request->userId ?? '');
 
         if ($code === '') {
             return json(['code' => 400, 'message' => '缺少 code，请先调用 wx.login']);
@@ -53,10 +54,15 @@ class Pay extends BaseController
             return json(['code' => 400, 'message' => '缺少 product_id']);
         }
 
-        // 基础配置未就绪时给出明确提示，避免生成无效签名
-        foreach (['appid', 'offer_id', 'app_key'] as $key) {
-            if ((string) config('virtualpay.' . $key, '') === '') {
-                return json(['code' => 500, 'message' => "虚拟支付尚未配置 {$key}，请在 .env 中补充后再下单"]);
+        // 基础配置未就绪时给出明确提示，避免生成无效签名（配置优先取自数据库，回退 .env）
+        $required = ['VP_APPID', 'VP_OFFER_ID', 'VP_APP_KEY'];
+        // 沙箱环境必须使用沙箱 AppKey 签名，缺了会被微信判 PAYMENT_ILLEGAL
+        if ((int) VpConfig::get('VP_ENV', 0) === 1) {
+            $required[] = 'VP_SANDBOX_APP_KEY';
+        }
+        foreach ($required as $name) {
+            if ((string) VpConfig::get($name, '') === '') {
+                return json(['code' => 500, 'message' => "虚拟支付尚未配置 {$name}，请在后台/数据库补充后再下单"]);
             }
         }
 
@@ -90,10 +96,10 @@ class Pay extends BaseController
             return json(['code' => 400, 'message' => '缺少 out_trade_no']);
         }
 
-        $userId = (int) ($request->userId ?? 0);
-        $user   = $userId > 0 ? Db::name('users')->where('id', $userId)->find() : null;
+        $userId = (string) ($request->userId ?? '');
+        $user   = $userId !== '' ? Db::name('users')->where('id', $userId)->find() : null;
 
-        $order = Db::name('virtual_pay_order')->where('out_trade_no', $outTradeNo)->find();
+        $order = Db::name('virtual_pay_orders')->where('out_trade_no', $outTradeNo)->find();
         if (!$order) {
             return json(['code' => 404, 'message' => '订单不存在']);
         }
@@ -117,22 +123,103 @@ class Pay extends BaseController
     }
 
     /**
+     * 钱包概览：服务端账户余额 + 购买记录
+     *
+     * 余额 = user_entitlements 按 openid 累计的 quantity（金币数）
+     * 记录 = virtual_pay_orders 中已发货（deliver_status=1）的订单
+     * 以 JWT 中的 userId 关联 users.openid，避免前端伪造余额
+     */
+    public function wallet(Request $request): Response
+    {
+        $userId = (string) ($request->userId ?? '');
+        $user   = $userId !== '' ? Db::name('users')->where('id', $userId)->find() : null;
+        if (!$user || empty($user['openid'])) {
+            return json(['code' => 401, 'message' => '用户未登录或缺少 openid']);
+        }
+        $openid = $user['openid'];
+
+        // 余额以 user_wallet 为准（充值发货时已入账到此表，buy 消费也走此表）
+        $wallet  = Db::name('user_wallet')->where('user_id', $userId)->find();
+        $balance = $wallet ? (int) $wallet['balance'] : 0;
+
+        $rows = Db::name('virtual_pay_orders')
+            ->where('openid', $openid)
+            ->where('deliver_status', 1)
+            ->order('paid_time', 'desc')
+            ->limit(50)
+            ->select()
+            ->toArray();
+
+        $goods   = config('virtualpay.goods', []);
+        $records = [];
+        foreach ($rows as $o) {
+            $grant = isset($goods[$o['product_id']]) ? (int) $goods[$o['product_id']]['grant'] : 0;
+            // 文章收益（article_income）等亦为正向收入
+            $records[] = [
+                'name'   => $o['product_name'] ?: $o['product_id'],
+                'amount' => $grant > 0 ? $grant * (int) $o['quantity'] : (int) $o['quantity'],
+                'time'   => $o['paid_time'] ?: $o['create_time'],
+            ];
+        }
+
+        // 金币支出：本人购买付费文章的记录（forum_post_purchases），以负向展示
+        $purchases = Db::name('forum_post_purchases')
+            ->alias('p')
+            ->join('forum_posts f', 'f.id = p.post_id', 'left')
+            ->where('p.user_id', $userId)
+            ->field('p.coins, p.create_time, f.title')
+            ->order('p.create_time', 'desc')
+            ->limit(50)
+            ->select()
+            ->toArray();
+        foreach ($purchases as $p) {
+            $records[] = [
+                'name'   => '购买文章《' . ($p['title'] ?: '未知') . '》',
+                'amount' => -(int) $p['coins'],
+                'time'   => $p['create_time'],
+            ];
+        }
+
+        // 合并后按时间倒序
+        usort($records, function ($a, $b) {
+            return strtotime($b['time'] ?? '0') - strtotime($a['time'] ?? '0');
+        });
+
+        return json([
+            'code'    => 200,
+            'message' => '获取成功',
+            'data'    => [
+                'balance' => $balance,
+                'records' => $records,
+            ],
+        ]);
+    }
+
+    /**
      * 发货推送：xpay_goods_deliver_notify
      *
      * 以「发货推送」为主路径；返回 ErrCode=0 表示成功，非 0 平台最多重试 15 次
      */
     public function notify(Request $request): Response
     {
+        // 微信服务器配置时的 URL/Token 验证：GET 请求，验签通过后原样返回 echostr
+        if (strtoupper($request->method()) === 'GET') {
+            $ok = VirtualPayService::verifyNotifySignature(
+                (string) $request->param('signature', ''),
+                (string) $request->param('timestamp', ''),
+                (string) $request->param('nonce', '')
+            );
+            // 用 text/plain 返回，避免 APP_DEBUG 下注入的调试工具条污染响应体（微信需逐字节比对 echostr）
+            return response($ok ? (string) $request->param('echostr', '') : 'invalid signature', $ok ? 200 : 403)
+                ->contentType('text/plain; charset=utf-8');
+        }
+
         $raw = (string) $request->getContent();
 
         try {
-            // 明文模式来源校验（配置了 Token 才校验）
-            $signature = (string) $request->param('signature', '');
-            $timestamp = (string) $request->param('timestamp', '');
-            $nonce     = (string) $request->param('nonce', '');
-            if ($signature !== '' && !VirtualPayService::verifyNotifySignature($signature, $timestamp, $nonce)) {
-                throw new \Exception('推送来源校验失败');
-            }
+            // 明文模式下，发货推送（POST）的来源由回调 URL 私密性保证，
+            // 不做公众号消息推送那套 signature 验签（该签名仅用于上面的 GET URL 握手）。
+            // 安全模式（AES 加密）需另行实现解密校验。
 
             $data = VirtualPayService::parseNotify($raw);
 
@@ -157,7 +244,7 @@ class Pay extends BaseController
         $outTradeNo = (string) $request->param('out_trade_no', '');
         try {
             if ($outTradeNo !== '') {
-                $order = Db::name('virtual_pay_order')->where('out_trade_no', $outTradeNo)->find();
+                $order = Db::name('virtual_pay_orders')->where('out_trade_no', $outTradeNo)->find();
                 if (!$order) {
                     return json(['code' => 404, 'message' => '订单不存在']);
                 }

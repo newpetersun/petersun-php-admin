@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 namespace app\service;
 
-use think\facade\Cache;
 use think\facade\Db;
+use app\service\VpConfig;
 
 /**
  * 微信小程序「虚拟支付：个人」服务
@@ -59,16 +59,16 @@ class VirtualPayService
     /** 按 env 取 AppKey：env=0 现网，env=1 沙箱 */
     public static function getAppKey(): string
     {
-        $env = (int) config('virtualpay.env', 0);
+        $env = (int) VpConfig::get('VP_ENV', 0);
         return $env === 1
-            ? (string) config('virtualpay.sandbox_app_key', '')
-            : (string) config('virtualpay.app_key', '');
+            ? (string) VpConfig::get('VP_SANDBOX_APP_KEY', '')
+            : (string) VpConfig::get('VP_APP_KEY', '');
     }
 
-    /** 环境标识：文档要求正式环境固定 0 */
+    /** 环境标识：0=现网，1=沙箱 */
     public static function getEnv(): int
     {
-        return (int) config('virtualpay.env', 0);
+        return (int) VpConfig::get('VP_ENV', 0);
     }
 
     // ------------------------------------------------------------------
@@ -78,18 +78,21 @@ class VirtualPayService
     /** 获取小程序全局 access_token（B 端接口需要），缓存 7000 秒 */
     public static function getAccessToken(): string
     {
-        $appid = (string) config('virtualpay.appid', '');
-        $cacheKey = 'vp_access_token_' . $appid;
+        $appid = (string) VpConfig::get('VP_APPID', '');
 
-        $cached = Cache::get($cacheKey);
-        if ($cached) {
-            return (string) $cached;
+        // 自管理文件缓存：写入系统临时目录，绕开 runtime 不可写的部署环境
+        $cacheFile = sys_get_temp_dir() . '/vp_token_' . md5($appid) . '.json';
+        if (is_file($cacheFile) && (time() - filemtime($cacheFile)) < 7000) {
+            $data = json_decode((string) file_get_contents($cacheFile), true);
+            if (!empty($data['access_token'])) {
+                return (string) $data['access_token'];
+            }
         }
 
         $url = self::API_HOST . '/cgi-bin/token?' . http_build_query([
             'grant_type' => 'client_credential',
             'appid'      => $appid,
-            'secret'     => (string) config('virtualpay.app_secret', ''),
+            'secret'     => (string) VpConfig::get('VP_APP_SECRET', ''),
         ]);
 
         $result = json_decode((string) self::httpGet($url), true);
@@ -97,7 +100,11 @@ class VirtualPayService
             throw new \Exception('获取 access_token 失败：' . json_encode($result, JSON_UNESCAPED_UNICODE));
         }
 
-        Cache::set($cacheKey, $result['access_token'], 7000);
+        file_put_contents($cacheFile, json_encode([
+            'access_token' => $result['access_token'],
+            'time'         => time(),
+        ]));
+
         return (string) $result['access_token'];
     }
 
@@ -109,8 +116,8 @@ class VirtualPayService
     public static function code2Session(string $code): array
     {
         $url = self::API_HOST . '/sns/jscode2session?' . http_build_query([
-            'appid'      => (string) config('virtualpay.appid', ''),
-            'secret'     => (string) config('virtualpay.app_secret', ''),
+            'appid'      => (string) VpConfig::get('VP_APPID', ''),
+            'secret'     => (string) VpConfig::get('VP_APP_SECRET', ''),
             'js_code'    => $code,
             'grant_type' => 'authorization_code',
         ]);
@@ -156,7 +163,7 @@ class VirtualPayService
 
         // signData 的键顺序与内容必须与实际请求一致，不做任何二次格式化
         $signData = json_encode([
-            'offerId'      => (string) config('virtualpay.offer_id', ''),
+            'offerId'      => (string) VpConfig::get('VP_OFFER_ID', ''),
             'buyQuantity'  => $quantity,
             'env'          => self::getEnv(),
             'currencyType' => 'CNY',
@@ -176,7 +183,8 @@ class VirtualPayService
         ];
 
         // 订单落库（待支付）
-        Db::name('virtual_pay_order')->insert([
+        Db::name('virtual_pay_orders')->insert([
+            'id'             => uuid(),
             'out_trade_no'   => $outTradeNo,
             'openid'         => $openid,
             'product_id'     => $goods['product_id'],
@@ -234,7 +242,7 @@ class VirtualPayService
     public static function assertMonthlyLimit(int $amountFen): void
     {
         $start = date('Y-m-01 00:00:00');
-        $used  = (int) Db::name('virtual_pay_order')
+        $used  = (int) Db::name('virtual_pay_orders')
             ->where('create_time', '>=', $start)
             ->whereIn('status', ['pending', 'paid'])
             ->sum('pay_fee');
@@ -298,7 +306,7 @@ class VirtualPayService
         }
 
         // 已按平台单号发过货 → 直接返回成功
-        $done = Db::name('virtual_pay_order')->where('wx_order_id', $wxOrderId)->find();
+        $done = Db::name('virtual_pay_orders')->where('wx_order_id', $wxOrderId)->find();
         if ($done && (int) $done['deliver_status'] === 1) {
             return [true, 'duplicate_skipped'];
         }
@@ -308,12 +316,12 @@ class VirtualPayService
             $now = date('Y-m-d H:i:s');
 
             $order = $outTradeNo !== ''
-                ? Db::name('virtual_pay_order')->where('out_trade_no', $outTradeNo)->find()
+                ? Db::name('virtual_pay_orders')->where('out_trade_no', $outTradeNo)->find()
                 : null;
 
             if ($order) {
                 // CAS：只有仍是「未发货」才允许占位，重复推送时影响行数为 0
-                $affected = Db::name('virtual_pay_order')
+                $affected = Db::name('virtual_pay_orders')
                     ->where('id', $order['id'])
                     ->where('deliver_status', 0)
                     ->update([
@@ -330,12 +338,13 @@ class VirtualPayService
                 }
             } else {
                 // 本地无订单（兜底查单场景）：补建一条，wx_order_id 唯一索引冲突即视为已处理
-                $exists = Db::name('virtual_pay_order')->where('wx_order_id', $wxOrderId)->find();
+                $exists = Db::name('virtual_pay_orders')->where('wx_order_id', $wxOrderId)->find();
                 if ($exists) {
                     $granted = false;
                     return;
                 }
-                Db::name('virtual_pay_order')->insert([
+                Db::name('virtual_pay_orders')->insert([
+                    'id'             => uuid(),
                     'out_trade_no'   => $outTradeNo !== '' ? $outTradeNo : $wxOrderId,
                     'wx_order_id'    => $wxOrderId,
                     'openid'         => $openid,
@@ -356,10 +365,58 @@ class VirtualPayService
             }
 
             self::grantEntitlement($openid, $productId, $quantity, $wxOrderId);
+
+            // 充值到账：把金币计入用户钱包（user_wallet），buy 与余额均以该表为准
+            $gCfg   = (array) config('virtualpay.goods', []);
+            $grant  = isset($gCfg[$productId]) ? (int) $gCfg[$productId]['grant'] : 0;
+            $amount = $grant > 0 ? $grant * $quantity : $quantity;
+
+            $userId = '';
+            if ($order && !empty($order['attach'])) {
+                $att = json_decode($order['attach'], true);
+                $userId = is_array($att) ? (string) ($att['user_id'] ?? '') : '';
+            }
+            if ($userId === '' && $openid !== '') {
+                $uid = Db::name('users')->where('openid', $openid)->value('id');
+                $userId = $uid ? (string) $uid : '';
+            }
+            if ($userId !== '' && $amount > 0) {
+                self::creditWallet($userId, $amount);
+            }
+
             $granted = true;
         });
 
         return [$granted ?: self::isDelivered($wxOrderId), $granted ? 'delivered' : 'duplicate_skipped'];
+    }
+
+    /**
+     * 充值金币入账到用户钱包（user_wallet），无钱包行则自动创建
+     */
+    private static function creditWallet(string $userId, int $amount): void
+    {
+        if ($userId === '' || $amount <= 0) {
+            return;
+        }
+        $wallet = Db::name('user_wallet')->where('user_id', $userId)->find();
+        if ($wallet) {
+            Db::name('user_wallet')
+                ->where('user_id', $userId)
+                ->inc('balance', $amount)
+                ->inc('total_earned', $amount)
+                ->update(['update_time' => date('Y-m-d H:i:s')]);
+        } else {
+            Db::name('user_wallet')->insert([
+                'id'           => uuid(),
+                'user_id'      => $userId,
+                'balance'      => $amount,
+                'frozen'       => 0,
+                'total_earned' => $amount,
+                'total_spent'  => 0,
+                'create_time'  => date('Y-m-d H:i:s'),
+                'update_time'  => date('Y-m-d H:i:s'),
+            ]);
+        }
     }
 
     /** 发放权益：user_entitlement 以 wx_order_id 唯一索引兜底防重复 */
@@ -369,22 +426,23 @@ class VirtualPayService
         $grant  = isset($goods[$productId]) ? (int) $goods[$productId]['grant'] : 0;
         $amount = $grant > 0 ? $grant * $quantity : $quantity;
 
-        if (Db::name('user_entitlement')->where('wx_order_id', $wxOrderId)->find()) {
+        if (Db::name('user_entitlements')->where('wx_order_id', $wxOrderId)->find()) {
             return;
         }
 
-        $row = Db::name('user_entitlement')
+        $row = Db::name('user_entitlements')
             ->where('openid', $openid)
             ->where('product_id', $productId)
             ->find();
 
         if ($row) {
-            Db::name('user_entitlement')
+            Db::name('user_entitlements')
                 ->where('id', $row['id'])
                 ->inc('quantity', $amount)
                 ->update(['update_time' => date('Y-m-d H:i:s')]);
         } else {
-            Db::name('user_entitlement')->insert([
+            Db::name('user_entitlements')->insert([
+                'id'          => uuid(),
                 'openid'      => $openid,
                 'product_id'  => $productId,
                 'quantity'    => $amount,
@@ -401,7 +459,7 @@ class VirtualPayService
         if ($wxOrderId === '') {
             return false;
         }
-        $row = Db::name('virtual_pay_order')->where('wx_order_id', $wxOrderId)->find();
+        $row = Db::name('virtual_pay_orders')->where('wx_order_id', $wxOrderId)->find();
         return $row && (int) $row['deliver_status'] === 1;
     }
 
@@ -451,7 +509,7 @@ class VirtualPayService
     /** 待发货订单列表（兜底扫描用） */
     public static function pendingOrders(int $limit = 100): array
     {
-        return Db::name('virtual_pay_order')
+        return Db::name('virtual_pay_orders')
             ->where('deliver_status', 0)
             ->where('create_time', '>=', date('Y-m-d H:i:s', time() - (int) config('virtualpay.query_window', 86400)))
             ->limit($limit)
@@ -492,7 +550,7 @@ class VirtualPayService
     /** 明文模式下的消息推送来源校验（配置 Token 后才校验） */
     public static function verifyNotifySignature(string $signature, string $timestamp, string $nonce): bool
     {
-        $token = (string) config('virtualpay.notify_token', '');
+        $token = trim((string) VpConfig::get('VP_NOTIFY_TOKEN', ''));
         if ($token === '') {
             return true; // 未配置 Token 时跳过，交由平台 URL 保密性保障
         }
