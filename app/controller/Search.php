@@ -36,7 +36,7 @@ class Search extends BaseController
 
             // ---------- 文章 ----------
             $posts = Db::name('forum_posts')
-                ->where('status', 1)
+                ->where('status', 'approved')
                 ->where(function ($q) use ($like) {
                     $q->where('title', 'like', $like)
                         ->whereOr('summary', 'like', $like)
@@ -154,6 +154,7 @@ class Search extends BaseController
      */
     private function formatBoard(array $board): array
     {
+        $bg = $board['color_bg'] ?? '#f1f5f9';
         return [
             'id'       => $board['id'],
             'value'    => $board['board_key'] ?? $board['key'] ?? '',
@@ -163,10 +164,31 @@ class Search extends BaseController
             'members'  => (int)($board['member_count'] ?? 0),
             'posts'    => (int)($board['post_count'] ?? 0),
             'color'    => [
-                'fg' => $board['color_fg'] ?? '#0f172a',
-                'bg' => $board['color_bg'] ?? '#f1f5f9'
+                'fg' => $this->contrastColor($bg),
+                'bg' => $bg
             ]
         ];
+    }
+
+    /**
+     * 根据背景色（hex/rgb）计算可读文字色：浅底用深字，深底用白字
+     */
+    private function contrastColor(string $bg): string
+    {
+        if (preg_match('/(\d+)\D+(\d+)\D+(\d+)/', $bg, $m)) {
+            $r = (int)$m[1];
+            $g = (int)$m[2];
+            $b = (int)$m[3];
+        } elseif (preg_match('/^#([0-9a-f]{6})$/i', $bg, $m)) {
+            $hex = $m[1];
+            $r = hexdec(substr($hex, 0, 2));
+            $g = hexdec(substr($hex, 2, 2));
+            $b = hexdec(substr($hex, 4, 2));
+        } else {
+            return '#0f172a';
+        }
+        $lum = (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255;
+        return $lum > 0.6 ? '#303133' : '#ffffff';
     }
 
     /**

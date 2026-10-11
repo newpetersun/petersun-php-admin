@@ -53,6 +53,27 @@ class Certification extends BaseController
             $materials = array_values(array_filter(array_slice($materials, 0, 3)));
             $materialsJson = json_encode($materials, JSON_UNESCAPED_SLASHES);
 
+            // 实名信息：个人认证需姓名+身份证号，企业认证需企业名+统一社会信用代码
+            $realName    = trim((string) $request->param('real_name', ''));
+            $idCard      = trim((string) $request->param('id_card', ''));
+            $companyName = trim((string) $request->param('company_name', ''));
+            $licenseNo   = trim((string) $request->param('license_no', ''));
+
+            if ($type === 'personal') {
+                if ($realName === '') {
+                    return json(['code' => 400, 'message' => '请填写真实姓名']);
+                }
+                if ($idCard === '') {
+                    return json(['code' => 400, 'message' => '请填写身份证号']);
+                }
+                if (!preg_match('/^\d{17}[\dXx]$/', $idCard)) {
+                    return json(['code' => 400, 'message' => '身份证号格式不正确']);
+                }
+            }
+            if ($type === 'enterprise' && ($companyName === '' || $licenseNo === '')) {
+                return json(['code' => 400, 'message' => '请填写企业名称与统一社会信用代码']);
+            }
+
             // 存在进行中的申请（待审核/已通过）时禁止重复提交
             $existing = Db::name('user_certifications')
                 ->where('user_id', $userId)
@@ -70,6 +91,10 @@ class Certification extends BaseController
                 'type'          => $type,
                 'cert_name'     => $certName,
                 'status'        => 'pending',
+                'real_name'     => $realName,
+                'id_card'       => $idCard,
+                'company_name'  => $companyName,
+                'license_no'    => $licenseNo,
                 'contact_phone' => $request->param('contact_phone', ''),
                 'materials'     => $materialsJson,
                 'description'   => $description,
@@ -203,8 +228,10 @@ class Certification extends BaseController
 
             $status = $action === 'approve' ? 'approved' : 'rejected';
             Db::name('user_certifications')->where('id', $id)->update([
-                'status' => $status,
-                'update_time' => date('Y-m-d H:i:s')
+                'status'        => $status,
+                'reject_reason' => $action === 'reject' ? $reason : null,
+                'audit_time'    => date('Y-m-d H:i:s'),
+                'update_time'   => date('Y-m-d H:i:s')
             ]);
 
             return json([

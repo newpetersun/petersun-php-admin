@@ -8,7 +8,11 @@ use think\Request;
 use think\facade\Db;
 use think\Response;
 
-class Admin extends BaseController
+/**
+ * 后台仪表盘 / 系统统计
+ * （原 Admin.php 重命名，消除与后台登录/权限中间件的命名歧义）
+ */
+class AdminDashboard extends BaseController
 {
 
     /**
@@ -18,34 +22,23 @@ class Admin extends BaseController
     {
         try {
             // 统计数据
-            $totalProjects = Db::name('projects')->where('status', 1)->count();
             $totalMessages = Db::name('contact_messages')->count();
             $unreadMessages = Db::name('contact_messages')->where('is_read', 0)->count();
             $todayVisits = $this->getTodayVisits();
-            
+
             // 最近活动
             $recentActivities = $this->getRecentActivities();
-            
-            // 项目分类统计
-            $projectCategories = Db::name('projects')
-                ->alias('p')
-                ->join('project_category pc', 'p.category_id = pc.id')
-                ->where('p.status', 1)
-                ->group('pc.name')
-                ->column('pc.name, count(*) as count');
-            
+
             return json([
                 'code' => 200,
                 'message' => '获取成功',
                 'data' => [
                     'stats' => [
-                        'total_projects' => $totalProjects,
                         'total_messages' => $totalMessages,
                         'unread_messages' => $unreadMessages,
                         'today_visits' => $todayVisits
                     ],
-                    'recent_activities' => $recentActivities,
-                    'project_categories' => $projectCategories
+                    'recent_activities' => $recentActivities
                 ]
             ]);
         } catch (\Exception $e) {
@@ -71,12 +64,23 @@ class Admin extends BaseController
                 ->where('create_time', '>=', date('Y-m-d 00:00:00'))
                 ->count();
             
-            // 项目统计
-            $totalProjects = Db::name('projects')->where('status', 1)->count();
-            $featuredProjects = Db::name('projects')->where('is_featured', 1)->where('status', 1)->count();
-            
             // 设备统计
             $deviceStats = $this->getDeviceStats();
+
+            // 用户统计
+            $totalUsers = Db::name('users')->count();
+            $newUsersToday = Db::name('users')
+                ->where('create_time', '>=', date('Y-m-d 00:00:00'))
+                ->count();
+            $newUsersWeek = Db::name('users')
+                ->where('create_time', '>=', date('Y-m-d 00:00:00', strtotime('monday this week')))
+                ->count();
+            $newUsersMonth = Db::name('users')
+                ->where('create_time', '>=', date('Y-m-01 00:00:00'))
+                ->count();
+
+            // 内容统计（已发布帖子）
+            $totalPosts = Db::name('forum_posts')->where('status', 'approved')->count();
             
             return json([
                 'code' => 200,
@@ -92,11 +96,16 @@ class Admin extends BaseController
                         'unread' => $unreadMessages,
                         'today' => $todayMessages
                     ],
-                    'projects' => [
-                        'total' => $totalProjects,
-                        'featured' => $featuredProjects
+                    'devices' => $deviceStats,
+                    'users' => [
+                        'total' => $totalUsers,
+                        'today' => $newUsersToday,
+                        'week' => $newUsersWeek,
+                        'month' => $newUsersMonth
                     ],
-                    'devices' => $deviceStats
+                    'content' => [
+                        'total' => $totalPosts
+                    ]
                 ]
             ]);
         } catch (\Exception $e) {
@@ -122,6 +131,43 @@ class Admin extends BaseController
                 ];
             }
             
+            return json([
+                'code' => 200,
+                'message' => '获取成功',
+                'data' => $trend
+            ]);
+        } catch (\Exception $e) {
+            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 获取用户增长趋势（新增 + 累计）
+     */
+    public function userTrend(Request $request): Response
+    {
+        try {
+            $days = (int) $request->param('days', 7);
+            $firstDate = date('Y-m-d', strtotime("-" . ($days - 1) . " days"));
+            $cumulative = (int) Db::name('users')
+                ->where('create_time', '<', $firstDate . ' 00:00:00')
+                ->count();
+
+            $trend = [];
+            for ($i = $days - 1; $i >= 0; $i--) {
+                $date = date('Y-m-d', strtotime("-$i days"));
+                $count = Db::name('users')
+                    ->where('create_time', '>=', $date . ' 00:00:00')
+                    ->where('create_time', '<', $date . ' 23:59:59')
+                    ->count();
+                $cumulative += $count;
+                $trend[] = [
+                    'date'  => $date,
+                    'count' => $count,
+                    'total' => $cumulative
+                ];
+            }
+
             return json([
                 'code' => 200,
                 'message' => '获取成功',
@@ -208,7 +254,7 @@ class Admin extends BaseController
      */
     private function getMonthVisits(): int
     {
-        $monthStart = date('Y-m-01 00:00:00');
+        $monthStart = date('Y-m-d 00:00:00');
         return Db::name('visit_logs')
             ->where('create_time', '>=', $monthStart)
             ->count();
@@ -256,24 +302,6 @@ class Admin extends BaseController
     private function getRecentActivities(): array
     {
         $activities = [];
-        
-        // 最近的项目
-        $recentProjects = Db::name('projects')
-            ->where('status', 1)
-            ->order('create_time', 'desc')
-            ->limit(3)
-            ->select()
-            ->toArray();
-        
-        foreach ($recentProjects as $project) {
-            $activities[] = [
-                'id' => $project['id'],
-                'type' => 'project',
-                'title' => '新增项目：' . $project['title'],
-                'time' => $this->getTimeAgo($project['create_time']),
-                'color' => '#10b981'
-            ];
-        }
         
         // 最近的留言
         $recentMessages = Db::name('contact_messages')

@@ -49,9 +49,10 @@ class User extends BaseController
                 'create_time' => $user['create_time'] ?? '',
             ];
 
-            // 封面：取该用户最新一条（含审核状态）
+            // 封面：取该用户最新一条「已通过」的封面（待审/驳回不对外）
             $cover = Db::name('user_covers')
                 ->where('user_id', $id)
+                ->where('status', 'approved')
                 ->order('create_time', 'desc')
                 ->field('image, status, create_time')
                 ->find();
@@ -69,7 +70,7 @@ class User extends BaseController
             // 文章：该用户已发布帖子（最新 10 条 + 总数），直接拼装为前端 PostCard 所需结构
             $rawArticles = Db::name('forum_posts')
                 ->where('user_id', $id)
-                ->where('status', 1)
+                ->where('status', 'approved')
                 ->order('create_time', 'desc')
                 ->limit(10)
                 ->field('id, title, summary, cover_images, tags, category, like_count, comment_count, views, create_time')
@@ -110,7 +111,7 @@ class User extends BaseController
             }, $rawArticles);
             $articleTotal = Db::name('forum_posts')
                 ->where('user_id', $id)
-                ->where('status', 1)
+                ->where('status', 'approved')
                 ->count();
 
             return json([
@@ -138,7 +139,7 @@ class User extends BaseController
     {
         try {
             $keyword = $request->param('keyword', '');
-            $role = $request->param('role', '');
+            $roleId = $request->param('role_id', '');
             $status = $request->param('status', '');
             $userType = $request->param('user_type', '');
             $page = $request->param('page', 1);
@@ -148,8 +149,12 @@ class User extends BaseController
             if ($keyword) {
                 $where[] = ['nickname', 'like', "%$keyword%"];
             }
-            if ($role && $role !== '全部角色') {
-                $where[] = ['role', '=', $role];
+            // 按角色筛选：拥有该角色（user_roles 关联 或 主角色 role_id）的用户
+            if ($roleId !== '' && $roleId !== '全部' && $roleId !== '0') {
+                $idsByPivot = Db::name('user_roles')->where('role_id', $roleId)->column('user_id');
+                $idsByMain  = Db::name('users')->where('role_id', $roleId)->column('id');
+                $matched = array_values(array_unique(array_merge($idsByPivot, $idsByMain)));
+                $where[] = ['id', 'in', $matched];
             }
             if ($status && $status !== '全部状态') {
                 $where[] = ['status', '=', $status === '活跃' ? 1 : 0];
@@ -166,6 +171,32 @@ class User extends BaseController
                 ]);
 
             $list = $users->items();
+
+            // 批量读取每个用户的角色（多角色）
+            $roleMap = [];
+            $userIds = array_column($list, 'id');
+            if ($userIds) {
+                $roleRows = Db::name('user_roles')->alias('ur')
+                    ->leftJoin('roles r', 'r.id = ur.role_id')
+                    ->where('ur.user_id', 'in', $userIds)
+                    ->where('r.status', 1)
+                    ->field('ur.user_id, r.id as rid, r.name, r.code')
+                    ->select()
+                    ->toArray();
+                foreach ($roleRows as $rr) {
+                    $roleMap[$rr['user_id']][] = [
+                        'id'   => $rr['rid'],
+                        'name' => $rr['name'],
+                        'code' => $rr['code']
+                    ];
+                }
+            }
+            foreach ($list as &$u) {
+                $u['role_list'] = $roleMap[$u['id']] ?? [];
+                $u['role_ids']  = array_column($u['role_list'], 'id');
+            }
+            unset($u);
+
             return json([
                 'code' => 200,
                 'message' => '获取成功',
@@ -188,14 +219,23 @@ class User extends BaseController
     public function create(Request $request): Response
     {
         try {
-            $data = $request->only(['nickname', 'role', 'status', 'avatar', 'cover', 'welcome_text', 'email', 'phone', 'qq', 'wechat', 'github', 'weibo', 'douyin', 'web_url']);
+            $data = $request->only(['nickname', 'role_id', 'status', 'avatar', 'cover', 'welcome_text', 'email', 'phone', 'qq', 'wechat', 'github', 'weibo', 'douyin', 'web_url', 'user_type', 'password']);
             if (empty($data['nickname'])) {
                 return json(['code' => 400, 'message' => '昵称不能为空']);
             }
-            
-            $data['user_type'] = 'admin';
+
+            // 多角色：优先 role_ids，兼容单 role_id
+            $roleIds = $this->parseRoleIds($request);
+
+            // 密码：仅在传入时哈希写入（不传则保持原值/空）
+            if (!empty($data['password'])) {
+                $data['password'] = \app\model\User::hashPassword($data['password']);
+            } else {
+                unset($data['password']);
+            }
+
+            $data['user_type'] = $data['user_type'] ?? 'admin';
             $data['status'] = $data['status'] ?? 1;
-            $data['role'] = $data['role'] ?? '管理员';
             $data['create_time'] = date('Y-m-d H:i:s');
             $data['update_time'] = date('Y-m-d H:i:s');
             // 修正 status 字段为 1/0
@@ -206,9 +246,14 @@ class User extends BaseController
                     $data['status'] = 0;
                 }
             }
-            $data['create_time'] = date('Y-m-d H:i:s');
             $data['avatar'] = $data['avatar'] ?? '/static/images/default-avatar.jpg';
-            $id = Db::name('users')->insertGetId(array_merge(['id' => uuid()], $data));
+            // 主角色（兼容旧逻辑 / 菜单 / 登录）
+            $data['role_id'] = !empty($roleIds) ? (int) $roleIds[0] : 0;
+
+            $id = uuid();
+            Db::name('users')->insert(array_merge(['id' => $id], $data));
+            $this->syncUserRoles($id, $roleIds ?? []);
+
             return json(['code' => 200, 'message' => '添加成功', 'data' => ['id' => $id]]);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
@@ -226,6 +271,7 @@ class User extends BaseController
             if (empty($id)) {
                 return json(['code' => 400, 'message' => '缺少用户ID']);
             }
+            Db::name('user_roles')->where('user_id', $id)->delete();
             $result = Db::name('users')->where('id', $id)->delete();
             if ($result) {
                 return json(['code' => 200, 'message' => '删除成功']);
@@ -245,7 +291,12 @@ class User extends BaseController
     {
         try {
             $id = $request->param('id');
-            $data = $request->only(['role', 'status', 'avatar', 'cover', 'welcome_text', 'nickname', 'code_age' ,'email', 'phone', 'qq', 'wechat', 'github', 'weibo', 'douyin', 'web_url', 'working_hours']);
+            $data = $request->only(['role_id', 'status', 'avatar', 'cover', 'welcome_text', 'nickname', 'code_age' ,'email', 'phone', 'qq', 'wechat', 'github', 'weibo', 'douyin', 'web_url', 'working_hours', 'password']);
+            if (!empty($data['password'])) {
+                $data['password'] = \app\model\User::hashPassword($data['password']);
+            } else {
+                unset($data['password']);
+            }
             if (isset($data['status'])) {
                 if ($data['status'] === 'active') {
                     $data['status'] = 1;
@@ -253,8 +304,21 @@ class User extends BaseController
                     $data['status'] = 0;
                 }
             }
+
+            // 多角色同步（未传角色参数则不改动）
+            $roleIds = $this->parseRoleIds($request);
+            if ($roleIds !== null) {
+                unset($data['role_id']);
+                $data['role_id'] = !empty($roleIds) ? (int) $roleIds[0] : 0;
+            } else {
+                unset($data['role_id']);
+            }
+
             $data['update_time'] = date('Y-m-d H:i:s');
             $result = Db::name('users')->where('id', $id)->update($data);
+            if ($roleIds !== null) {
+                $this->syncUserRoles($id, $roleIds);
+            }
             if ($result !== false) {
                 return json(['code' => 200, 'message' => '更新成功']);
             } else {
@@ -291,30 +355,6 @@ class User extends BaseController
                     'avatar' => $avatar,
                     'welcome_text' => $welcomeText
                 ]
-            ]);
-        } catch (\Exception $e) {
-            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
-        }
-    }
-
-    /**
-     * 获取技术栈列表
-     */
-    public function technologies(): Response
-    {
-        try {
-            // 从technology表中获取启用的技术
-            $technologies = Db::name('technologies')
-                ->field('id, name, img, sort_order')
-                ->where('status', 1)
-                ->order('id', 'asc')
-                ->select()
-                ->toArray();
-            
-            return json([
-                'code' => 200,
-                'message' => '获取成功',
-                'data' => $technologies
             ]);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
@@ -373,13 +413,9 @@ class User extends BaseController
             $savePath = '/static/images/avatar/';
             $ext = $file->getOriginalExtension();
             $filename = uniqid('avatar_') . '.' . $ext;
-            $info = $file->move(public_path() . $savePath, $filename);
-            if ($info) {
-                $url = $savePath . $filename;
-                return json(['code' => 200, 'message' => '上传成功', 'data' => ['url' => $url]]);
-            } else {
-                return json(['code' => 500, 'message' => $file->getError()]);
-            }
+            $file->move(public_path() . $savePath, $filename);
+            $url = $savePath . $filename;
+            return json(['code' => 200, 'message' => '上传成功', 'data' => ['url' => $url]]);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
         }
@@ -423,10 +459,7 @@ class User extends BaseController
                 mkdir($fullPath, 0755, true);
             }
 
-            $info = $file->move($fullPath, $filename);
-            if (!$info) {
-                return json(['code' => 500, 'message' => $file->getError()]);
-            }
+            $file->move($fullPath, $filename);
 
             $url = $savePath . $filename;
 
@@ -454,70 +487,66 @@ class User extends BaseController
 
 
     /**
-     * 保存用户信息
+     * 保存用户信息（小程序端编辑资料）
+     * 资料字段进入「待审快照」，审核通过后才覆盖 users 对外生效（资料审核）。
+     * 统计/登录类字段（visit_count/like_count/last_login_time）直接更新，不参与审核。
+     * 身份统一取自 JWT（request->userId），不再使用 user_key。
      */
     public function saveUserInfo(Request $request): Response
     {
         try {
+            $userId = $request->userId;
+            if (empty($userId)) {
+                return json(['code' => 401, 'message' => '请先登录']);
+            }
+
             $data = $request->only([
-                'nickName', 'avatarUrl', 'gender', 'country', 'province', 
+                'nickName', 'avatarUrl', 'gender', 'country', 'province',
                 'city', 'language', 'visitCount', 'likeCount', 'loginTime'
             ]);
-            
-            // 生成唯一用户ID（基于微信信息）
-            $userKey = md5($data['nickName'] . $data['avatarUrl']);
-            
-            // 检查用户是否已存在 - 使用统一的 users 表
-            $existingUser = Db::name('users')->where('user_key', $userKey)->find();
-            
-            if ($existingUser) {
-                // 更新用户信息
-                $updateData = [
-                    'nickname' => $data['nickName'],
-                    'avatar' => $data['avatarUrl'], // 字段名统一为 avatar
-                    'gender' => $data['gender'] ?? 0,
-                    'country' => $data['country'] ?? '',
-                    'province' => $data['province'] ?? '',
-                    'city' => $data['city'] ?? '',
-                    'language' => $data['language'] ?? '',
-                    'visit_count' => $data['visitCount'] ?? 0,
-                    'like_count' => $data['likeCount'] ?? 0,
-                    'last_login_time' => date('Y-m-d H:i:s'),
-                    'update_time' => date('Y-m-d H:i:s')
-                ];
-                
-                Db::name('users')->where('id', $existingUser['id'])->update($updateData);
-                $userId = $existingUser['id'];
-            } else {
-                // 创建新用户
-                $insertData = [
-                    'user_key' => $userKey,
-                    'nickname' => $data['nickName'],
-                    'avatar' => $data['avatarUrl'], // 字段名统一为 avatar
-                    'gender' => $data['gender'] ?? 0,
-                    'country' => $data['country'] ?? '',
-                    'province' => $data['province'] ?? '',
-                    'city' => $data['city'] ?? '',
-                    'language' => $data['language'] ?? '',
-                    'visit_count' => $data['visitCount'] ?? 0,
-                    'like_count' => $data['likeCount'] ?? 0,
-                    'user_type' => 'wechat', // 统一用户类型
-                    'status' => 1,
-                    'role' => '访客',
-                    'create_time' => date('Y-m-d H:i:s'),
-                    'update_time' => date('Y-m-d H:i:s')
-                ];
-                
-                $userId = Db::name('users')->insertGetId(array_merge(['id' => uuid()], $insertData));
+
+            $user = Db::name('users')->where('id', $userId)->find();
+            if (!$user) {
+                return json(['code' => 404, 'message' => '用户不存在']);
             }
-            
+
+            // 统计/登录信息直接更新（非审核字段）
+            Db::name('users')->where('id', $userId)->update([
+                'visit_count'      => $data['visitCount'] ?? $user['visit_count'],
+                'like_count'       => $data['likeCount'] ?? $user['like_count'],
+                'last_login_time'  => date('Y-m-d H:i:s'),
+                'update_time'      => date('Y-m-d H:i:s')
+            ]);
+
+            // 资料字段进入待审快照
+            $pending = [
+                'nickname'    => $data['nickName'],
+                'avatar'      => $data['avatarUrl'],
+                'gender'      => $data['gender'] ?? 0,
+                'country'     => $data['country'] ?? '',
+                'province'    => $data['province'] ?? '',
+                'city'        => $data['city'] ?? '',
+                'status'      => 'pending',
+                'update_time' => date('Y-m-d H:i:s')
+            ];
+            $ex = Db::name('user_profile_pending')->where('user_id', $userId)->find();
+            if ($ex) {
+                Db::name('user_profile_pending')->where('user_id', $userId)->update($pending);
+            } else {
+                $pending['id'] = uuid();
+                $pending['user_id'] = $userId;
+                $pending['create_time'] = date('Y-m-d H:i:s');
+                Db::name('user_profile_pending')->insert($pending);
+            }
+            Db::name('users')->where('id', $userId)->update([
+                'profile_status' => 'pending',
+                'update_time'    => date('Y-m-d H:i:s')
+            ]);
+
             return json([
-                'code' => 200,
-                'message' => '保存成功',
-                'data' => [
-                    'user_id' => $userId,
-                    'user_key' => $userKey
-                ]
+                'code'    => 200,
+                'message' => '资料已提交，待审核',
+                'data'    => ['user_id' => $userId]
             ]);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
@@ -530,14 +559,13 @@ class User extends BaseController
     public function getUserInfo(Request $request): Response
     {
         try {
-            $userKey = $request->param('user_key', '');
-            
-            if (empty($userKey)) {
-                return json(['code' => 400, 'message' => '用户标识不能为空']);
+            $userId = $request->userId;
+            if (empty($userId)) {
+                return json(['code' => 401, 'message' => '请先登录']);
             }
-            
-            $user = Db::name('users')->where('user_key', $userKey)->find();
-            
+
+            $user = Db::name('users')->where('id', $userId)->find();
+
             if (!$user) {
                 return json(['code' => 404, 'message' => '用户不存在']);
             }
@@ -570,15 +598,15 @@ class User extends BaseController
     public function updateUserStats(Request $request): Response
     {
         try {
-            $userKey = $request->param('user_key', '');
+            $userId = $request->userId;
             $type = $request->param('type', ''); // 'visit' 或 'like'
-            
-            if (empty($userKey) || empty($type)) {
-                return json(['code' => 400, 'message' => '参数不完整']);
+
+            if (empty($userId) || empty($type)) {
+                return json(['code' => 401, 'message' => '请先登录且参数完整']);
             }
-            
-            $user = Db::name('users')->where('user_key', $userKey)->find();
-            
+
+            $user = Db::name('users')->where('id', $userId)->find();
+
             if (!$user) {
                 return json(['code' => 404, 'message' => '用户不存在']);
             }
@@ -604,6 +632,44 @@ class User extends BaseController
             ]);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
+        }
+    }
+
+    // ========================================================
+    // 后台审核：封面审核 / 资料审核 已迁移至 UserReviewAdmin 控制器
+    // ========================================================
+
+    /**
+     * 解析请求中的角色集合：优先 role_ids(数组)，回退单 role_id；均无则返回 null
+     */
+    private function parseRoleIds(Request $request): ?array
+    {
+        $ids = $request->param('role_ids/a');
+        if (is_array($ids) && count($ids) > 0) {
+            return array_values(array_unique(array_map('intval', $ids)));
+        }
+        $single = $request->param('role_id');
+        if ($single !== '' && $single !== null) {
+            return [(int) $single];
+        }
+        return null;
+    }
+
+    /**
+     * 同步用户-角色关联（全量替换）
+     */
+    private function syncUserRoles(string $userId, array $roleIds): void
+    {
+        Db::name('user_roles')->where('user_id', $userId)->delete();
+        foreach ($roleIds as $rid) {
+            if ($rid > 0) {
+                Db::name('user_roles')->insert([
+                    'id'          => uuid(),
+                    'user_id'     => $userId,
+                    'role_id'     => (int) $rid,
+                    'create_time' => date('Y-m-d H:i:s')
+                ]);
+            }
         }
     }
 } 

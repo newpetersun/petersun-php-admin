@@ -37,7 +37,7 @@ class Board extends BaseController
                     ->alias('m')
                     ->join('users u', 'm.user_id = u.id', 'left')
                     ->whereIn('m.board_id', $boardIds)
-                    ->field('m.board_id, m.id, m.user_id, m.role, u.user_key, u.nickname, u.avatar')
+                    ->field('m.board_id, m.id, m.user_id, m.role, u.nickname, u.avatar')
                     ->order('m.id', 'asc')
                     ->select()
                     ->toArray();
@@ -81,9 +81,9 @@ class Board extends BaseController
                 $where[] = ['id', '=', $id];
             }
 
-            $board = Db::name('forum_boards')->where($where)->find();
+            $board = Db::name('forum_boards')->where($where)->where('status', 1)->find();
             if (!$board) {
-                return json(['code' => 404, 'message' => '板块不存在']);
+                return json(['code' => 404, 'message' => '板块不存在或未审核通过']);
             }
 
             // 版主
@@ -105,7 +105,7 @@ class Board extends BaseController
             // 最新帖子
             $posts = Db::name('forum_posts')
                 ->where('board_id', $board['id'])
-                ->where('status', 1)
+                ->where('status', 'approved')
                 ->order('create_time', 'desc')
                 ->limit(20)
                 ->select()
@@ -116,7 +116,7 @@ class Board extends BaseController
             $pinned = Db::name('forum_posts')
                 ->where('board_id', $board['id'])
                 ->where('is_pinned', 1)
-                ->where('status', 1)
+                ->where('status', 'approved')
                 ->order('create_time', 'desc')
                 ->limit(5)
                 ->select()
@@ -231,9 +231,14 @@ class Board extends BaseController
     {
         try {
             $keyword = $request->param('keyword', '');
+            $status  = $request->param('status', '');
             $where = [];
             if (!empty($keyword)) {
                 $where[] = ['name|board_key|description', 'like', "%$keyword%"];
+            }
+            // 审核筛选：status=2 待审核 / status=1 已通过(正常) / status=0 已驳回(禁用)，all/空表示全部
+            if ($status !== '' && $status !== 'all') {
+                $where[] = ['status', '=', (int) $status];
             }
             $boards = Db::name('forum_boards')
                 ->where($where)
@@ -259,7 +264,7 @@ class Board extends BaseController
         try {
             $data = $request->only([
                 'board_key', 'name', 'icon_text', 'description',
-                'color_fg', 'color_bg', 'cover_image', 'announcement',
+                'color_bg', 'cover_image', 'announcement',
                 'sort_order', 'status'
             ]);
             if (empty($data['name']) || empty($data['board_key'])) {
@@ -270,7 +275,8 @@ class Board extends BaseController
                 return json(['code' => 400, 'message' => '板块标识已存在']);
             }
             $data['sort_order'] = $data['sort_order'] ?? 0;
-            $data['status'] = isset($data['status']) ? (int)$data['status'] : 1;
+            // 新板块默认进入「待审核」，由管理员在「板块审核」中通过/驳回
+            $data['status'] = isset($data['status']) ? (int)$data['status'] : 2;
             $id = Db::name('forum_boards')->insertGetId(array_merge(['id' => uuid()], $data));
             return json(['code' => 200, 'message' => '创建成功', 'data' => ['id' => $id]]);
         } catch (\Exception $e) {
@@ -286,7 +292,7 @@ class Board extends BaseController
         try {
             $data = $request->only([
                 'board_key', 'name', 'icon_text', 'description',
-                'color_fg', 'color_bg', 'cover_image', 'announcement',
+                'color_bg', 'cover_image', 'announcement',
                 'sort_order', 'status'
             ]);
             if (empty($data['name']) || empty($data['board_key'])) {

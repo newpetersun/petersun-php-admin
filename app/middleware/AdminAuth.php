@@ -35,7 +35,7 @@ class AdminAuth
         // 检查用户是否存在且为管理员
         $user = Db::name('users')
             ->where('id', $userId)
-            ->field('id, user_type, status')
+            ->field('id, status')
             ->find();
             
         if (!$user) {
@@ -54,19 +54,14 @@ class AdminAuth
                 'data' => null
             ]);
         }
-        
-        // 检查用户类型是否为管理员
-        if ($user['user_type'] !== 'webmaster') {
-            return json([
-                'code' => 403,
-                'message' => '无管理员权限',
-                'data' => null
-            ]);
-        }
-        
+
+        // 不再按 user_type 限制；后台菜单/权限由用户 role_id 对应角色决定
         // 将用户信息添加到请求中
         $request->adminUser = $user;
-        
+        // 标记管理端上下文：供控制器区分「本人操作」与「管理端操作」
+        // （如查看待审核/已驳回内容详情、跨用户读取数据等）
+        $request->isAdmin = true;
+
         return $next($request);
     }
 }

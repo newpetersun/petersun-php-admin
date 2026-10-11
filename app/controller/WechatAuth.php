@@ -6,9 +6,11 @@ namespace app\controller;
 use app\BaseController;
 use think\Request;
 use think\facade\Db;
+use think\facade\Cache;
 use think\Response;
 use app\service\JwtService;
 use app\service\VpConfig;
+use app\service\VirtualPayService;
 
 class WechatAuth extends BaseController
 {
@@ -91,9 +93,6 @@ class WechatAuth extends BaseController
                 return json(['code' => 400, 'message' => 'openid、昵称和头像不能为空']);
             }
             
-            // 生成用户唯一标识
-            $userKey = md5($data['openid'] . $data['nickName'] . $data['avatarUrl']);
-            
             // 检查是否已存在 - 使用统一的 users 表
             $existingUser = Db::name('users')->where('openid', $data['openid'])->find();
             
@@ -101,12 +100,18 @@ class WechatAuth extends BaseController
                 return json(['code' => 400, 'message' => '用户已存在']);
             }
             
+            // 默认注册角色（全局仅一个，启用状态）：新注册用户自动获得
+            $defaultRoleId = (int) Db::name('roles')
+                ->where('is_default', 1)
+                ->where('status', 1)
+                ->value('id');
+
             // 创建新用户 - 使用统一的 users 表
+            // 真实昵称/头像进「待审快照」，users 先写占位，审核通过后才对外生效（资料审核）
             $insertData = [
                 'openid' => $data['openid'],
-                'user_key' => $userKey,
-                'nickname' => $data['nickName'],
-                'avatar' => $data['avatarUrl'], // 字段名统一为 avatar
+                'nickname' => '微信用户' . substr(md5($data['openid']), 0, 8), // 占位，保证唯一
+                'avatar' => '/static/images/default-avatar.jpg',
                 'gender' => $data['gender'] ?? 0,
                 'country' => $data['country'] ?? '',
                 'province' => $data['province'] ?? '',
@@ -117,6 +122,8 @@ class WechatAuth extends BaseController
                 'like_count' => 0,
                 'user_type' => 'visitor', // 枚举值：visitor/customer/webmaster
                 'status' => 1,
+                'role_id' => $defaultRoleId, // 默认注册角色（主角色，兼容旧逻辑）
+                'profile_status' => 'pending', // 资料待审
                 'create_time' => date('Y-m-d H:i:s'),
                 'update_time' => date('Y-m-d H:i:s'),
                 'last_login_time' => date('Y-m-d H:i:s')
@@ -125,6 +132,16 @@ class WechatAuth extends BaseController
             // users.id 为显式 UUID（非自增），不能用 insertGetId（会返回错误的 lastInsertId）
             $userId = uuid();
             Db::name('users')->insert(array_merge(['id' => $userId], $insertData));
+
+            // 写入默认角色关联（多角色兼容）
+            if ($defaultRoleId > 0) {
+                Db::name('user_roles')->insert([
+                    'id'          => uuid(),
+                    'user_id'     => $userId,
+                    'role_id'     => $defaultRoleId,
+                    'create_time' => date('Y-m-d H:i:s')
+                ]);
+            }
 
             // 初始化用户钱包（金币余额，默认 0）
             Db::name('user_wallet')->insert([
@@ -137,7 +154,22 @@ class WechatAuth extends BaseController
                 'create_time'  => date('Y-m-d H:i:s'),
                 'update_time'  => date('Y-m-d H:i:s')
             ]);
-            
+
+            // 真实资料写入待审快照（审核通过后才覆盖 users，资料审核）
+            Db::name('user_profile_pending')->insert([
+                'id'          => uuid(),
+                'user_id'     => $userId,
+                'nickname'    => $data['nickName'],
+                'avatar'      => $data['avatarUrl'],
+                'gender'      => $data['gender'] ?? 0,
+                'country'     => $data['country'] ?? '',
+                'province'    => $data['province'] ?? '',
+                'city'        => $data['city'] ?? '',
+                'status'      => 'pending',
+                'create_time' => date('Y-m-d H:i:s'),
+                'update_time' => date('Y-m-d H:i:s')
+            ]);
+
             // 生成正式token
             $token = $this->generateToken($userId);
             $this->updateUserToken($userId, $token);
@@ -272,4 +304,47 @@ class WechatAuth extends BaseController
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
         }
     }
+
+
+    /**
+     * 小程序端确认登录（需用户 JWT；启用账号即可）
+     */
+    public function scanConfirm(Request $request): Response
+    {
+        try {
+            $userId = $request->userId ?? '';
+            $ticket = (string) $request->param('ticket', '');
+
+            if (empty($userId)) {
+                return json(['code' => 401, 'message' => '请先登录小程序']);
+            }
+            $row = Db::name('admin_scan_tickets')
+                ->where('ticket', $ticket)
+                ->where('status', 0)
+                ->find();
+            if (!$row) {
+                return json(['code' => 404, 'message' => '票据不存在或已使用']);
+            }
+            if (strtotime($row['expire_time']) < time()) {
+                return json(['code' => 410, 'message' => '二维码已过期']);
+            }
+
+            $user = Db::name('users')->where('id', $userId)->find();
+            if (!$user) {
+                return json(['code' => 404, 'message' => '用户不存在']);
+            }
+            if ($user['status'] != 1) {
+                return json(['code' => 403, 'message' => '账号已被禁用']);
+            }
+
+            Db::name('admin_scan_tickets')
+                ->where('ticket', $ticket)
+                ->update(['status' => 1, 'user_id' => $userId]);
+
+            return json(['code' => 200, 'message' => '已确认，请在网页端完成登录']);
+        } catch (\Exception $e) {
+            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
+        }
+    }
+
 }

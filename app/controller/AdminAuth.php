@@ -12,11 +12,10 @@ use app\service\JwtService;
 use app\service\VirtualPayService;
 
 /**
- * 后台登录
- *  - 管理员密码登录：账号=站长昵称(nickname)/密码(bcrypt)，仅 user_type=webmaster 可登录 -> 签发用户 JWT
- *  - 创作者扫码登录：网页生成票据 -> 服务端生成小程序码 -> 小程序扫码确认 -> 网页轮询拿 JWT
+ * 后台登录（与原 WechatAuth 拆分的后台专属登录：密码登录 / 扫码登录 / 图形验证码）
+ * 小程序微信登录仍留在 WechatAuth，职责分离。
  */
-class AdminLogin extends BaseController
+class AdminAuth extends BaseController
 {
     /**
      * 管理员密码登录
@@ -28,7 +27,7 @@ class AdminLogin extends BaseController
             $password = (string) $request->param('password', '');
 
             if ($username === '' || $password === '') {
-                return json(['code' => 400, 'message' => '用户名和密码不能为空']);
+                return json(['code' => 400, 'message' => '手机号和密码不能为空']);
             }
 
             // 图形验证码校验（防爆破）：一次性、5 分钟过期，错误即失效
@@ -44,22 +43,41 @@ class AdminLogin extends BaseController
             }
             Cache::delete('admin_captcha_' . $captchaId);
 
-            // 直接查 users 表：仅 webmaster 且启用、且已设置密码的账号可密码登录
+            // 直接查 users 表：启用且已设置密码的账号可密码登录
             $user = Db::name('users')
-                ->where('nickname', $username)
-                ->where('user_type', 'webmaster')
+                ->where('phone', $username)
                 ->where('status', 1)
-                ->field('id, nickname, avatar, password')
+                ->field('id, nickname, phone, avatar, role_id, password')
                 ->find();
 
             if (!$user || empty($user['password']) || !password_verify($password, $user['password'])) {
-                return json(['code' => 401, 'message' => '用户名或密码错误']);
+                return json(['code' => 401, 'message' => '手机号或密码错误']);
             }
 
             $token = (new JwtService())->generateToken([
                 'user_id' => $user['id'],
                 'type'    => 'user',
             ]);
+
+            // 角色：主角色 code（用于跳转/兼容）+ 完整角色列表（多角色切换）
+            $roleList = Db::name('user_roles')->alias('ur')
+                ->leftJoin('roles r', 'r.id = ur.role_id')
+                ->where('ur.user_id', $user['id'])
+                ->where('r.status', 1)
+                ->field('r.id as id, r.name as name, r.code as code')
+                ->select()
+                ->toArray();
+            $primaryCode = '';
+            if (!empty($user['role_id'])) {
+                $primaryCode = (string) (Db::name('roles')->where('id', $user['role_id'])->value('code') ?? '');
+                // 主角色兜底：老数据主角色未写进 user_roles 时补入列表
+                if ($primaryCode && !in_array($primaryCode, array_column($roleList, 'code'), true)) {
+                    $pr = Db::name('roles')->where('id', $user['role_id'])->field('id, name, code')->find();
+                    if ($pr) {
+                        $roleList[] = ['id' => $pr['id'], 'name' => $pr['name'], 'code' => $pr['code']];
+                    }
+                }
+            }
 
             return json([
                 'code'    => 200,
@@ -70,6 +88,8 @@ class AdminLogin extends BaseController
                         'id'       => $user['id'],
                         'nickname' => $user['nickname'],
                         'avatar'   => $user['avatar'],
+                        'role'     => $primaryCode,
+                        'role_list'=> $roleList,
                     ],
                 ],
             ]);
@@ -129,9 +149,8 @@ class AdminLogin extends BaseController
             if ($row['status'] == 1) {
                 $user = Db::name('users')
                     ->where('id', $row['user_id'])
-                    ->where('user_type', 'webmaster')
                     ->where('status', 1)
-                    ->field('id, nickname, avatar')
+                    ->field('id, nickname, avatar, role_id')
                     ->find();
                 if (!$user) {
                     return json(['code' => 403, 'message' => '登录账号无效']);
@@ -145,6 +164,14 @@ class AdminLogin extends BaseController
                     ->where('ticket', $ticket)
                     ->update(['status' => 3]);
 
+                // 角色 code（用于前端按身份跳转/拉取对应菜单）
+                $roleCode = '';
+                if (!empty($user['role_id'])) {
+                    $roleCode = (string) (Db::name('roles')
+                        ->where('id', $user['role_id'])
+                        ->value('code') ?? '');
+                }
+
                 return json([
                     'code'    => 200,
                     'message' => '登录成功',
@@ -154,6 +181,7 @@ class AdminLogin extends BaseController
                             'id'       => $user['id'],
                             'nickname' => $user['nickname'],
                             'avatar'   => $user['avatar'],
+                            'role'     => $roleCode,
                         ],
                     ],
                 ]);
@@ -170,44 +198,24 @@ class AdminLogin extends BaseController
     }
 
     /**
-     * 小程序端确认登录（需用户 JWT；仅 webmaster 可登录后台）
+     * 获取登录图形验证码：返回 captchaId + base64 图片
+     * 答案以 admin_captcha_{id} 存入缓存，5 分钟有效，登录成功后一次性删除
      */
-    public function scanConfirm(Request $request): Response
+    public function captcha(): Response
     {
         try {
-            $userId = $request->userId ?? '';
-            $ticket = (string) $request->param('ticket', '');
-
-            if (empty($userId)) {
-                return json(['code' => 401, 'message' => '请先登录小程序']);
-            }
-            $row = Db::name('admin_scan_tickets')
-                ->where('ticket', $ticket)
-                ->where('status', 0)
-                ->find();
-            if (!$row) {
-                return json(['code' => 404, 'message' => '票据不存在或已使用']);
-            }
-            if (strtotime($row['expire_time']) < time()) {
-                return json(['code' => 410, 'message' => '二维码已过期']);
-            }
-
-            $user = Db::name('users')->where('id', $userId)->find();
-            if (!$user) {
-                return json(['code' => 404, 'message' => '用户不存在']);
-            }
-            if ($user['user_type'] !== 'webmaster') {
-                return json(['code' => 403, 'message' => '仅站点主理人(创作者)可登录后台']);
-            }
-            if ($user['status'] != 1) {
-                return json(['code' => 403, 'message' => '账号已被禁用']);
-            }
-
-            Db::name('admin_scan_tickets')
-                ->where('ticket', $ticket)
-                ->update(['status' => 1, 'user_id' => $userId]);
-
-            return json(['code' => 200, 'message' => '已确认，请在网页端完成登录']);
+            $code = $this->genCaptchaCode(4);
+            $id   = bin2hex(random_bytes(8));
+            Cache::set('admin_captcha_' . $id, strtolower($code), 300);
+            $img  = $this->renderCaptchaImage($code);
+            return json([
+                'code'    => 200,
+                'message' => '获取成功',
+                'data'    => [
+                    'captchaId' => $id,
+                    'image'     => 'data:image/png;base64,' . base64_encode($img),
+                ],
+            ]);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
         }
@@ -247,7 +255,7 @@ class AdminLogin extends BaseController
             }
             return 'data:image/png;base64,' . base64_encode($img);
         } catch (\Exception $e) {
-            return '';
+            return $e->getMessage();
         }
     }
 
@@ -266,30 +274,6 @@ class AdminLogin extends BaseController
         $res = curl_exec($ch);
         curl_close($ch);
         return (string) $res;
-    }
-
-    /**
-     * 获取登录图形验证码：返回 captchaId + base64 图片
-     * 答案以 admin_captcha_{id} 存入缓存，5 分钟有效，登录成功后一次性删除
-     */
-    public function captcha(): Response
-    {
-        try {
-            $code = $this->genCaptchaCode(4);
-            $id   = bin2hex(random_bytes(8));
-            Cache::set('admin_captcha_' . $id, strtolower($code), 300);
-            $img  = $this->renderCaptchaImage($code);
-            return json([
-                'code'    => 200,
-                'message' => '获取成功',
-                'data'    => [
-                    'captchaId' => $id,
-                    'image'     => 'data:image/png;base64,' . base64_encode($img),
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
-        }
     }
 
     /**
@@ -347,4 +331,4 @@ class AdminLogin extends BaseController
         imagedestroy($img);
         return $data;
     }
-}
+} 

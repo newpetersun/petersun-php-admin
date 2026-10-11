@@ -26,7 +26,7 @@ class Forum extends BaseController
             $limit = (int)$request->param('limit', 10);
 
             $rows = Db::name('forum_posts')
-                ->where('status', 1)
+                ->where('status', 'approved')
                 ->group('category')
                 ->field('category, count(*) as count')
                 ->order('count', 'desc')
@@ -70,7 +70,7 @@ class Forum extends BaseController
             $limit = (int)$request->param('limit', 6);
 
             $posts = Db::name('forum_posts')
-                ->where('status', 1)
+                ->where('status', 'approved')
                 ->order('views', 'desc')
                 ->order('create_time', 'desc')
                 ->limit($limit)
@@ -106,7 +106,7 @@ class Forum extends BaseController
             $limit = (int)$request->param('limit', 10);
 
             $rows = Db::name('forum_posts')
-                ->where('status', 1)
+                ->where('status', 'approved')
                 ->group('user_id')
                 ->field('user_id, count(*) as post_count')
                 ->order('post_count', 'desc')
