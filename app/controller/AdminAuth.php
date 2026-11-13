@@ -100,7 +100,7 @@ class AdminAuth extends BaseController
 
     /**
      * 创建扫码登录票据，返回小程序码（base64）
-     * 小程序码指向 pages/scan-login/scan-login?ticket=xxx
+     * 小程序码指向 subpkg/scan-login/scan-login?ticket=xxx
      */
     public function scanTicket(Request $request): Response
     {
@@ -113,7 +113,7 @@ class AdminAuth extends BaseController
                 'create_time' => date('Y-m-d H:i:s'),
             ]);
 
-            $path   = 'pages/scan-login/scan-login?ticket=' . $ticket;
+            $path   = 'subpkg/scan-login/scan-login?ticket=' . $ticket;
             $qrcode = $this->genMiniCode($path);
 
             return json([

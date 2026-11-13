@@ -7,6 +7,7 @@ use app\BaseController;
 use think\Request;
 use think\facade\Db;
 use think\Response;
+use app\service\PostService;
 
 /**
  * 论坛板块接口
@@ -66,13 +67,13 @@ class Board extends BaseController
 
     /**
      * 板块详情（含公告、版主、置顶、最新帖子）
-     * 支持 ?key=java 或 ?id=1
+     * 支持 ?key=java 或 ?id=<uuid>
      */
     public function detail(Request $request): Response
     {
         try {
             $key = $request->param('key', '');
-            $id  = $request->param('id', 0);
+            $id  = $request->param('id', '');
 
             $where = [];
             if (!empty($key)) {
@@ -84,6 +85,16 @@ class Board extends BaseController
             $board = Db::name('forum_boards')->where($where)->where('status', 1)->find();
             if (!$board) {
                 return json(['code' => 404, 'message' => '板块不存在或未审核通过']);
+            }
+
+            // 当前登录用户是否已加入该板块（未登录则为 false）
+            $userId = $request->userId ?? null;
+            $joined = false;
+            if ($userId) {
+                $joined = Db::name('forum_board_members')
+                    ->where('board_id', $board['id'])
+                    ->where('user_id', $userId)
+                    ->count() > 0;
             }
 
             // 版主
@@ -110,7 +121,9 @@ class Board extends BaseController
                 ->limit(20)
                 ->select()
                 ->toArray();
-            $posts = array_map([$this, 'formatPost'], $posts);
+            // 复用 PostService 的完整帖子格式化（与 post/list 保持一致，字段更全）
+            $postSvc = new PostService();
+            $posts = array_map([$postSvc, 'formatPost'], $posts);
 
             // 置顶帖子
             $pinned = Db::name('forum_posts')
@@ -130,6 +143,7 @@ class Board extends BaseController
             }, $pinned);
 
             $data = $board;
+            $data['joined']      = $joined;
             $data['moderators'] = $moderators;
             $data['pinned']     = $pinnedList;
             $data['posts']      = $posts;
@@ -153,9 +167,19 @@ class Board extends BaseController
             $userId  = $request->userId;
             $boardId = $request->param('board_id', 0);
             $key     = $request->param('key', '');
+            $id      = $request->param('id', '');
+            $boardKey = $request->param('board_key', '');
 
             if (empty($boardId) && !empty($key)) {
                 $board = Db::name('forum_boards')->where('board_key', $key)->find();
+                $boardId = $board ? $board['id'] : '';
+            }
+            if (empty($boardId) && !empty($boardKey)) {
+                $board = Db::name('forum_boards')->where('board_key', $boardKey)->find();
+                $boardId = $board ? $board['id'] : '';
+            }
+            if (empty($boardId) && !empty($id)) {
+                $board = Db::name('forum_boards')->where('id', $id)->find();
                 $boardId = $board ? $board['id'] : '';
             }
             if (empty($boardId)) {
@@ -264,7 +288,7 @@ class Board extends BaseController
         try {
             $data = $request->only([
                 'board_key', 'name', 'icon_text', 'description',
-                'color_bg', 'cover_image', 'announcement',
+                'color_bg', 'cover_image', 'avatar', 'announcement',
                 'sort_order', 'status'
             ]);
             if (empty($data['name']) || empty($data['board_key'])) {
@@ -292,7 +316,7 @@ class Board extends BaseController
         try {
             $data = $request->only([
                 'board_key', 'name', 'icon_text', 'description',
-                'color_bg', 'cover_image', 'announcement',
+                'color_bg', 'cover_image', 'avatar', 'announcement',
                 'sort_order', 'status'
             ]);
             if (empty($data['name']) || empty($data['board_key'])) {
@@ -345,40 +369,4 @@ class Board extends BaseController
         }
     }
 
-    private function formatPost(array $post): array
-    {
-        $author = Db::name('users')
-            ->where('id', $post['user_id'])
-            ->field('nickname, avatar')
-            ->find();
-
-        $cover = [];
-        if (!empty($post['cover_images'])) {
-            $decoded = json_decode($post['cover_images'], true);
-            if (is_array($decoded)) {
-                $cover = $decoded;
-            }
-        }
-
-        $tags = [];
-        if (!empty($post['tags'])) {
-            $tags = array_filter(explode(',', $post['tags']));
-        }
-
-        return [
-            'id'           => $post['id'],
-            'title'        => $post['title'],
-            'summary'      => $post['summary'] ?? '',
-            'author'       => $author['nickname'] ?? '匿名用户',
-            'authorAvatar' => $author['avatar'] ?? self::DEFAULT_AVATAR,
-            'category'     => $post['category'],
-            'tags'         => array_values($tags),
-            'createdAt'    => $post['create_time'],
-            'views'        => (int)$post['views'],
-            'comments'     => (int)$post['comment_count'],
-            'likes'        => (int)$post['like_count'],
-            'isEssence'    => (bool)$post['is_essence'],
-            'coverImages'  => array_slice($cover, 0, 9)
-        ];
-    }
 }

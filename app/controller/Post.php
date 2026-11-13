@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace app\controller;
@@ -8,8 +9,10 @@ use think\Request;
 use think\facade\Db;
 use think\Response;
 use app\service\PostService;
+use app\service\PosterService;
 use app\service\VirtualPayService;
 use app\service\JwtService;
+use app\service\NotificationService;
 
 /**
  * 内容（帖子）统一控制器
@@ -26,10 +29,12 @@ use app\service\JwtService;
 class Post extends BaseController
 {
     private PostService $svc;
+    private NotificationService $noti;
 
     public function __construct()
     {
-        $this->svc = new PostService();
+        $this->svc  = new PostService();
+        $this->noti = new NotificationService();
     }
 
     // ========================================================
@@ -70,7 +75,7 @@ class Post extends BaseController
                 }
             } elseif (!empty($key)) {
                 $board = Db::name('forum_boards')->where('board_key', $key)->find();
-if ($board) {
+                if ($board) {
                     $where[] = ['board_id', '=', $board['id']];
                 }
             }
@@ -145,9 +150,6 @@ if ($board) {
                 $liked = !empty($like);
             }
             $data['liked'] = $liked;
-
-            // 评论
-            $data['comments'] = $this->svc->getComments($id);
 
             return json([
                 'code'    => 200,
@@ -228,6 +230,67 @@ if ($board) {
             return json([
                 'code' => 200,
                 'data' => ['image' => 'data:image/png;base64,' . base64_encode($img)],
+            ]);
+        } catch (\Exception $e) {
+            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 帖子分享海报（后端合成）
+     *  - 套用「默认/指定」海报模板，将帖子标题/摘要/封面 + 小程序码合成一张图
+     *  - 返回 base64 PNG，前端直接展示/保存
+     */
+    public function poster(Request $request): Response
+    {
+        try {
+            $id = (string) $request->param('id', '');
+            if ($id === '' || !preg_match('/^[\w\-]+$/', $id)) {
+                return json(['code' => 400, 'message' => '缺少或非法的帖子ID']);
+            }
+            $row = Db::name('forum_posts')
+                ->where('id', $id)
+                ->field('id,title,summary,cover_images,type,update_time')
+                ->find();
+            if (!$row) {
+                return json(['code' => 404, 'message' => '帖子不存在']);
+            }
+
+            $cover = '';
+            $covers = json_decode((string) ($row['cover_images'] ?? ''), true);
+            if (is_array($covers) && !empty($covers)) {
+                $first = $covers[0];
+                $cover = is_array($first) ? (string) ($first['url'] ?? '') : (string) $first;
+            }
+
+            $post = [
+                'title'     => $row['title'] ?? '',
+                'content'   => $row['summary'] ?? '',
+                'cover'     => $cover,
+                'code_path' => 'subpkg/forum/detail?id=' . $id,
+            ];
+
+            $designId = (int) $request->param('design_id', 0);
+            $postType = (string) ($row['type'] ?? '');
+            $config   = PosterService::getDesignConfig($designId, $postType);
+
+            // 简单文件缓存：模板不变且帖子未更新时不重复合成
+            $cacheKey  = md5($id . '|' . $designId . '|' . $postType . '|' . ($row['update_time'] ?? ''));
+            $cacheFile = runtime_path() . 'poster/' . $cacheKey . '.png';
+            if (is_file($cacheFile)) {
+                $png = file_get_contents($cacheFile);
+            } else {
+                $png = PosterService::render($config, $post);
+                $dir = dirname($cacheFile);
+                if (!is_dir($dir)) {
+                    mkdir($dir, 0755, true);
+                }
+                file_put_contents($cacheFile, $png);
+            }
+
+            return json([
+                'code' => 200,
+                'data' => ['image' => 'data:image/png;base64,' . base64_encode($png)],
             ]);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
@@ -340,11 +403,27 @@ if ($board) {
                     ]);
                     Db::name('forum_posts')->where('id', $postId)->inc('like_count')->update();
                     $liked = true;
+                    $likePost = Db::name('forum_posts')->where('id', $postId)
+                        ->field('user_id, title')->find();
                 }
                 Db::commit();
             } catch (\Exception $e) {
                 Db::rollback();
                 throw $e;
+            }
+
+            // 点赞成功 -> 通知帖子作者（与主流程隔离，失败不影响点赞）
+            if ($liked && isset($likePost) && (string) $likePost['user_id'] !== $userId) {
+                try {
+                    $this->noti->likeNotify(
+                        (string) $likePost['user_id'],
+                        $userId,
+                        $postId,
+                        (string) ($likePost['title'] ?? '')
+                    );
+                } catch (\Throwable $e) {
+                    // 忽略通知异常
+                }
             }
 
             $likes = (int) Db::name('forum_posts')->where('id', $postId)->value('like_count');
@@ -380,17 +459,52 @@ if ($board) {
                 return json(['code' => 400, 'message' => '评论内容不能为空']);
             }
 
-            $commentId = Db::name('forum_post_comments')->insertGetId([
-                'id'          => $this->uuidV4(),
+            // 校验 reply_to：必须是本帖内存在的评论，否则降级为一级评论，避免外键 500
+            if ($replyTo !== '') {
+                $parent = Db::name('forum_post_comments')
+                    ->where('id', $replyTo)
+                    ->where('post_id', $postId)
+                    ->where('status', 1)
+                    ->find();
+                if (!$parent) {
+                    $replyTo = '';
+                }
+            }
+
+            $commentId = $this->uuidV4();
+            Db::name('forum_post_comments')->insert([
+                'id'          => $commentId,
                 'post_id'     => $postId,
                 'user_id'     => $userId,
-                'parent_id'   => $replyTo ?: null,
+                'parent_id'   => $replyTo !== '' ? $replyTo : null,
                 'content'     => $content,
                 'status'      => 1,
                 'create_time' => date('Y-m-d H:i:s'),
             ]);
 
             Db::name('forum_posts')->where('id', $postId)->inc('comment_count')->update();
+
+            // 评论 / 回复成功 -> 通知相关人员（与主流程隔离，失败不影响评论）
+            try {
+                $post = Db::name('forum_posts')->where('id', $postId)
+                    ->field('user_id, title')->find();
+                $postAuthor = $post ? (string) $post['user_id'] : '';
+                if ($postAuthor !== '' && $postAuthor !== $userId) {
+                    // 顶层评论：通知帖子作者
+                    $this->noti->commentNotify($postAuthor, $userId, $content, $postId, (string) ($post['title'] ?? ''));
+                }
+                if ($replyTo !== '') {
+                    // 回复：通知被回复的评论作者（避免与帖子作者重复通知）
+                    $parent = Db::name('forum_post_comments')->where('id', $replyTo)
+                        ->field('user_id')->find();
+                    $parentAuthor = $parent ? (string) $parent['user_id'] : '';
+                    if ($parentAuthor !== '' && $parentAuthor !== $userId && $parentAuthor !== $postAuthor) {
+                        $this->noti->replyNotify($parentAuthor, $userId, $content, $commentId);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // 忽略通知异常
+            }
 
             return json([
                 'code'    => 200,
@@ -999,6 +1113,21 @@ if ($board) {
                 return json(['code' => 400, 'message' => '驳回原因不能为空']);
             }
             $this->svc->review($id, $action, $reason);
+
+            // 审核结果通知作者（与主流程隔离，失败不影响审核结果）
+            try {
+                $authorId = (string) ($post['user_id'] ?? '');
+                if ($authorId !== '') {
+                    $actionText = $action === 'approve' ? '你的帖子已通过审核' : '你的帖子未通过审核';
+                    $snippet    = $action === 'reject'
+                        ? ('原因：' . $reason)
+                        : ((string) ($post['title'] ?? ''));
+                    $this->noti->systemNotify($authorId, $actionText, $snippet);
+                }
+            } catch (\Throwable $e) {
+                // 忽略通知异常
+            }
+
             return json(['code' => 200, 'message' => $action === 'approve' ? '已通过' : '已驳回']);
         } catch (\Exception $e) {
             return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
@@ -1070,11 +1199,14 @@ if ($board) {
     {
         return sprintf(
             '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
             mt_rand(0, 0xffff),
             mt_rand(0, 0x0fff) | 0x4000,
             mt_rand(0, 0x3fff) | 0x8000,
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff)
         );
     }
 
@@ -1087,7 +1219,8 @@ if ($board) {
             CURLOPT_POSTFIELDS     => $rawBody,
             CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
             CURLOPT_TIMEOUT        => $timeout,
-            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 2,
         ]);
         $res = curl_exec($ch);
         if ($res === false) {
@@ -1098,4 +1231,4 @@ if ($board) {
         curl_close($ch);
         return (string) $res;
     }
-} 
+}

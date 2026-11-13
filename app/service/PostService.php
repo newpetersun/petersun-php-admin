@@ -151,7 +151,7 @@ class PostService
                 'content'      => $c['content'],
                 'author'       => $author['nickname'] ?? '匿名用户',
                 'authorAvatar' => $author['avatar'] ?? self::DEFAULT_AVATAR,
-                'replyTo'      => (int) $c['parent_id'],
+                'replyTo'      => $c['parent_id'],
                 'likeCount'    => (int) $c['like_count'],
                 'createdAt'    => $c['create_time'],
             ];

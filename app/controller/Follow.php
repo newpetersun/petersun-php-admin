@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\controller;
 
 use app\BaseController;
+use app\service\NotificationService;
 use think\Request;
 use think\facade\Db;
 use think\Response;
@@ -48,6 +49,13 @@ class Follow extends BaseController
                 'following_id' => $followingId,
                 'create_time'  => date('Y-m-d H:i:s')
             ]);
+
+            // 新关注 -> 通知被关注者（与主流程隔离，失败不影响关注）
+            try {
+                (new NotificationService())->followNotify($followingId, $followerId);
+            } catch (\Throwable $e) {
+                // 忽略通知异常
+            }
 
             return json(['code' => 200, 'message' => '关注成功', 'data' => ['followed' => true]]);
         } catch (\Exception $e) {

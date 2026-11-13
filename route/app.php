@@ -134,6 +134,16 @@ Route::group('message', function () {
     Route::get('unread-count', 'Message/unreadCount');
 })->middleware('JwtAuth');
 
+// ===================== 通知（互动提醒） =====================
+Route::group('message', function () {
+    Route::get('notifications', 'Message/notifications');
+    Route::get('notification-unread', 'Message/notificationUnread');
+    Route::post('notification-read/:id', 'Message/notificationRead');
+    Route::post('notification-read-all', 'Message/notificationReadAll');
+    Route::post('notification-delete/:id', 'Message/notificationDelete');
+    Route::post('notification-clear', 'Message/notificationClear');
+})->middleware('JwtAuth');
+
 // ===================== 虚拟支付（道具直购） =====================
 Route::group('pay', function () {
     Route::get('goods', 'Pay/goods');
@@ -188,6 +198,10 @@ Route::group('wechat', function () {
     Route::post('complete-info', 'WechatAuth/completeUserInfo');
     Route::get('verify-token', 'WechatAuth/verifyToken');
     Route::post('scan-confirm', 'WechatAuth/scanConfirm');
+    // 账号密码登录（非小程序端 H5/App），公开
+    Route::post('password-login', 'WechatAuth/passwordLogin');
+    // 账号登录图形验证码（公开）
+    Route::get('captcha', 'WechatAuth/captcha');
 });
 // 后台登录（与小程序登录拆分到 AdminAuth 控制器，公开）
 Route::get('admin/captcha', 'AdminAuth/captcha');
@@ -209,7 +223,9 @@ Route::group('post', function () {
     Route::get('detail/:id', 'Post/detail');
     Route::get('comments/:id', 'Post/comments');
     Route::get('poster-code', 'Post/posterCode');
-})->pattern(['id' => '[\w-]+']);
+    // 帖子分享海报（后端合成，套用海报模板）
+    Route::get('poster', 'Post/poster');
+    })->pattern(['id' => '[\w-]+']);
 // 登录写（发帖 / 点赞 / 评论 / 购买 / 举报 / 上传 / 更新 / 删除 + 创作者能力）
 Route::group('post', function () {
     Route::post('create', 'Post/create');
@@ -234,8 +250,27 @@ Route::group('post', function () {
     Route::post('review/:id', 'Post/review');
 })->middleware(['JwtAuth', 'AdminAuth'])->pattern(['id' => '[\w-]+']);
 
+// ===================== 个人内容库（已购 / 收藏 / 历史） =====================
+Route::group('library', function () {
+    Route::get('purchased', 'Library/purchased');
+    Route::get('favorites', 'Library/favorites');
+    Route::get('history', 'Library/history');
+    Route::post('favorite', 'Library/favorite');
+    Route::post('record-history', 'Library/recordHistory');
+    Route::post('clear-history', 'Library/clearHistory');
+})->middleware('JwtAuth');
+
 // ===================== 综合搜索 =====================
 Route::get('search', 'Search/index');
+
+// ===================== 海报设计（管理员） =====================
+Route::group('poster', function () {
+    Route::get('list', 'PosterAdmin/list');
+    Route::post('save', 'PosterAdmin/save');
+    Route::delete('delete/:id', 'PosterAdmin/delete');
+    Route::post('default/:id', 'PosterAdmin/setDefault');
+    Route::post('preview', 'PosterAdmin/preview');
+})->middleware(['JwtAuth', 'AdminAuth'])->pattern(['id' => '\d+']);
 
 // ===================== 系统设置 / 备份 =====================
 Route::group('setting', function () {

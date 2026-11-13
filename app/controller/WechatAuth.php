@@ -347,4 +347,144 @@ class WechatAuth extends BaseController
         }
     }
 
+    /**
+     * 账号密码登录（非小程序端：H5 / App）
+     * 支持 手机号 / 用户名 / 邮箱 登录，密码走 bcrypt 校验。
+     * 返回结构与微信登录一致：{ token, user_info }，前端 finishLogin 可直接复用。
+     */
+    public function passwordLogin(Request $request): Response
+    {
+        try {
+            $account  = trim((string) $request->param('account', ''));
+            $password = (string) $request->param('password', '');
+
+            if ($account === '' || $password === '') {
+                return json(['code' => 400, 'message' => '请输入账号和密码']);
+            }
+
+            // 图形验证码校验（防爆破）：一次性、5 分钟过期，错误即失效
+            $captchaId = (string) $request->param('captchaId', '');
+            $captcha   = (string) $request->param('captcha', '');
+            if ($captchaId === '' || $captcha === '') {
+                return json(['code' => 400, 'message' => '请输入验证码']);
+            }
+            $cached = Cache::get('wechat_captcha_' . $captchaId);
+            if (!$cached || strtolower($captcha) !== strtolower((string) $cached)) {
+                Cache::delete('wechat_captcha_' . $captchaId);
+                return json(['code' => 400, 'message' => '验证码错误']);
+            }
+            Cache::delete('wechat_captcha_' . $captchaId);
+
+            // 手机号 / 用户名 / 邮箱 任一匹配，且账号启用、已设置密码
+            $user = Db::name('users')
+                ->where('phone', $account)
+                ->where('status', 1)
+                ->field('id, openid, nickname, avatar, user_type, visit_count, like_count, password')
+                ->find();
+
+            if (!$user || empty($user['password']) || !password_verify($password, $user['password'])) {
+                return json(['code' => 401, 'message' => '账号或密码错误']);
+            }
+
+            $token = $this->generateToken($user['id']);
+            $this->updateUserToken($user['id'], $token);
+
+            return json([
+                'code'    => 200,
+                'message' => '登录成功',
+                'data'    => [
+                    'token'     => $token,
+                    'user_info' => [
+                        'id'          => $user['id'],
+                        'openid'      => $user['openid'],
+                        'nickname'    => $user['nickname'],
+                        'avatar'      => $user['avatar'],
+                        'visit_count' => $user['visit_count'],
+                        'like_count'  => $user['like_count'],
+                        'user_type'   => $user['user_type'],
+                    ],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 获取登录图形验证码：返回 captchaId + base64 图片
+     * 与后台 AdminAuth::captcha 同款，缓存键 wechat_captcha_{id}，5 分钟有效，登录成功后一次性删除
+     */
+    public function captcha(): Response
+    {
+        try {
+            $code = $this->genCaptchaCode(4);
+            $id   = bin2hex(random_bytes(8));
+            Cache::set('wechat_captcha_' . $id, strtolower($code), 300);
+            $img  = $this->renderCaptchaImage($code);
+            return json([
+                'code'    => 200,
+                'message' => '获取成功',
+                'data'    => [
+                    'captchaId' => $id,
+                    'image'     => 'data:image/png;base64,' . base64_encode($img),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return json(['code' => 500, 'message' => '服务器错误：' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * 生成验证码字符（去掉易混淆的 0/O/1/l/I）
+     */
+    private function genCaptchaCode(int $len): string
+    {
+        $pool = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $max  = strlen($pool) - 1;
+        $out  = '';
+        for ($i = 0; $i < $len; $i++) {
+            $out .= $pool[rand(0, $max)];
+        }
+        return $out;
+    }
+
+    /**
+     * 用 GD 内置字体绘制验证码图片（不依赖外部 TTF 字体文件）
+     */
+    private function renderCaptchaImage(string $code): string
+    {
+        if (!extension_loaded('gd')) {
+            throw new \RuntimeException('GD extension not available');
+        }
+        $w = 110;
+        $h = 40;
+        $img = imagecreatetruecolor($w, $h);
+        $bg  = imagecolorallocate($img, 245, 247, 250);
+        imagefill($img, 0, 0, $bg);
+
+        for ($i = 0; $i < 6; $i++) {
+            $c = imagecolorallocate($img, rand(180, 225), rand(180, 225), rand(180, 225));
+            imageline($img, rand(0, $w), rand(0, $h), rand(0, $w), rand(0, $h), $c);
+        }
+        for ($i = 0; $i < 40; $i++) {
+            $c = imagecolorallocate($img, rand(180, 225), rand(180, 225), rand(180, 225));
+            imagesetpixel($img, rand(0, $w), rand(0, $h), $c);
+        }
+        $len = strlen($code);
+        for ($i = 0; $i < $len; $i++) {
+            $color = imagecolorallocate($img, rand(40, 120), rand(40, 120), rand(40, 160));
+            $font  = rand(4, 5);
+            $x = 12 + $i * (($w - 24) / $len);
+            $y = rand(8, 16);
+            imagestring($img, $font, (int) $x, $y, $code[$i], $color);
+        }
+
+        ob_start();
+        imagepng($img);
+        $data = ob_get_contents();
+        ob_end_clean();
+        imagedestroy($img);
+        return $data;
+    }
+
 }

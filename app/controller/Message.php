@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\controller;
 
 use app\BaseController;
+use app\service\NotificationService;
 use think\Request;
 use think\facade\Db;
 use think\Response;
@@ -50,14 +51,15 @@ class Message extends BaseController
                     ->where('to_id', $uid)->where('is_read', 0)->count();
 
                 $list[] = [
-                    'id'         => $cid,
-                    'peerId'     => $peerId,
-                    'name'       => (string) ($peer['nickname'] ?? '已注销用户'),
-                    'avatar'     => (string) ($peer['avatar'] ?? ''),
-                    'last'       => $last ? mb_substr((string) $last['content'], 0, 30) : '',
-                    'time'       => (string) $r['last_time'],
-                    'unread'     => (int) $unread,
-                    'lastFromMe' => $last ? ((string) $last['from_id'] === $uid) : false,
+                    'id'          => $cid,
+                    'unread'      => (int) $unread,
+                    'user'        => [
+                        'name'     => (string) ($peer['nickname'] ?? '已注销用户'),
+                        'avatar'   => (string) ($peer['avatar'] ?? ''),
+                        'user_key' => (string) $peerId,
+                    ],
+                    'lastMessage' => $last ? mb_substr((string) $last['content'], 0, 30) : '',
+                    'time'        => (string) $r['last_time'],
                 ];
             }
 
@@ -181,6 +183,115 @@ class Message extends BaseController
             $n = Db::name('user_messages')->where('to_id', $uid)->where('is_read', 0)->count();
 
             return $this->ok(['unread' => (int) $n]);
+        } catch (\Exception $e) {
+            return $this->err($e);
+        }
+    }
+
+    // ========================================================
+    // 通知（互动提醒）
+    // ========================================================
+
+    /** 通知列表：?type=comment|like|at|follow|system|all（默认 all），分页返回并附带未读总数 */
+    public function notifications(Request $request): Response
+    {
+        try {
+            $uid = $this->uid($request);
+            if ($uid === '') {
+                return json(['code' => 401, 'message' => '未登录或登录已过期']);
+            }
+            $type = trim((string) $request->param('type', 'all'));
+            [$page, $limit] = $this->paging($request);
+
+            $svc  = new NotificationService();
+            $data = $svc->listForUser($uid, $type, $page, $limit);
+            return $this->ok($data);
+        } catch (\Exception $e) {
+            return $this->err($e);
+        }
+    }
+
+    /** 通知未读数 */
+    public function notificationUnread(Request $request): Response
+    {
+        try {
+            $uid = $this->uid($request);
+            if ($uid === '') {
+                return json(['code' => 401, 'message' => '未登录或登录已过期']);
+            }
+            $svc = new NotificationService();
+            return $this->ok(['unread' => $svc->unreadCount($uid)]);
+        } catch (\Exception $e) {
+            return $this->err($e);
+        }
+    }
+
+    /** 标记单条通知已读 */
+    public function notificationRead(Request $request, $id): Response
+    {
+        try {
+            $uid = $this->uid($request);
+            if ($uid === '') {
+                return json(['code' => 401, 'message' => '未登录或登录已过期']);
+            }
+            $id = (string) $id;
+            if ($id === '') {
+                return json(['code' => 400, 'message' => '通知ID不能为空']);
+            }
+            Db::name('notifications')->where('id', $id)->where('user_id', $uid)
+                ->where('is_read', 0)
+                ->update(['is_read' => 1, 'read_time' => date('Y-m-d H:i:s')]);
+            return $this->ok(null, '已读');
+        } catch (\Exception $e) {
+            return $this->err($e);
+        }
+    }
+
+    /** 全部标记为已读 */
+    public function notificationReadAll(Request $request): Response
+    {
+        try {
+            $uid = $this->uid($request);
+            if ($uid === '') {
+                return json(['code' => 401, 'message' => '未登录或登录已过期']);
+            }
+            Db::name('notifications')->where('user_id', $uid)->where('is_read', 0)
+                ->update(['is_read' => 1, 'read_time' => date('Y-m-d H:i:s')]);
+            return $this->ok(null, '已全部标记为已读');
+        } catch (\Exception $e) {
+            return $this->err($e);
+        }
+    }
+
+    /** 删除单条通知 */
+    public function notificationDelete(Request $request, $id): Response
+    {
+        try {
+            $uid = $this->uid($request);
+            if ($uid === '') {
+                return json(['code' => 401, 'message' => '未登录或登录已过期']);
+            }
+            $id = (string) $id;
+            if ($id === '') {
+                return json(['code' => 400, 'message' => '通知ID不能为空']);
+            }
+            Db::name('notifications')->where('id', $id)->where('user_id', $uid)->delete();
+            return $this->ok(null, '已删除');
+        } catch (\Exception $e) {
+            return $this->err($e);
+        }
+    }
+
+    /** 清空通知（删除全部） */
+    public function notificationClear(Request $request): Response
+    {
+        try {
+            $uid = $this->uid($request);
+            if ($uid === '') {
+                return json(['code' => 401, 'message' => '未登录或登录已过期']);
+            }
+            Db::name('notifications')->where('user_id', $uid)->delete();
+            return $this->ok(null, '已清空');
         } catch (\Exception $e) {
             return $this->err($e);
         }

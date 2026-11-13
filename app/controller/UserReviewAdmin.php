@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\controller;
 
 use app\BaseController;
+use app\service\NotificationService;
 use think\Request;
 use think\facade\Db;
 use think\Response;
@@ -79,6 +80,11 @@ class UserReviewAdmin extends BaseController
                     'update_time' => date('Y-m-d H:i:s')
                 ]);
                 $msg = '已通过';
+                // 通知封面所属用户（隔离异常，失败不影响审核）
+                try {
+                    (new NotificationService())->systemNotify((string) $cover['user_id'], '封面审核已通过', '你的封面已通过审核并展示');
+                } catch (\Throwable $e) {
+                }
             } else {
                 if (!$reason) {
                     return json(['code' => 400, 'message' => '请填写驳回原因']);
@@ -90,6 +96,10 @@ class UserReviewAdmin extends BaseController
                     'update_time'   => date('Y-m-d H:i:s')
                 ]);
                 $msg = '已驳回';
+                try {
+                    (new NotificationService())->systemNotify((string) $cover['user_id'], '封面审核未通过', '驳回原因：' . $reason);
+                } catch (\Throwable $e) {
+                }
             }
 
             return json(['code' => 200, 'message' => $msg]);
@@ -187,6 +197,11 @@ class UserReviewAdmin extends BaseController
                 Db::name('user_profile_pending')->where('user_id', $userId)
                     ->update(['status' => 'approved', 'update_time' => date('Y-m-d H:i:s')]);
                 $msg = '已通过，资料已生效';
+                // 通知被审核用户（隔离异常，失败不影响审核）
+                try {
+                    (new NotificationService())->systemNotify((string) $userId, '资料审核已通过', '新的个人资料已生效');
+                } catch (\Throwable $e) {
+                }
             } else {
                 if (!$reason) {
                     return json(['code' => 400, 'message' => '请填写驳回原因']);
@@ -205,6 +220,10 @@ class UserReviewAdmin extends BaseController
                     ]);
                 }
                 $msg = '已驳回';
+                try {
+                    (new NotificationService())->systemNotify((string) $userId, '资料审核未通过', '驳回原因：' . $reason);
+                } catch (\Throwable $e) {
+                }
             }
 
             return json(['code' => 200, 'message' => $msg]);
